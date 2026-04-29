@@ -143,6 +143,23 @@ cd backend && source .venv/bin/activate && python -m compileall app
 cd frontend && npx tsc -b --noEmit
 ```
 
+### Continuous integration
+
+GitHub Actions runs on every pull request and on pushes to `main`:
+
+- **CI** (`.github/workflows/ci.yml`) — frontend production build, Python
+  byte-compile of `backend/app`, and `helm lint` / `helm template` for the
+  chart.
+- **Container image** (`.github/workflows/container.yml`) — on pull
+  requests, builds the multi-arch Docker image **without** pushing (safe for
+  forks). On pushes to any branch and on `workflow_dispatch`, logs into
+  Docker Hub and pushes `zfeldstein/foyre` with tags derived from the
+  branch name, short SHA, and (for `v*` git tags) semver labels.
+
+Repository maintainers must configure **Actions secrets**
+`DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` for publishes to succeed. Use a
+Docker Hub access token, not your account password.
+
 ## Pull requests
 
 - Reference the issue your PR addresses (`Fixes #123`).

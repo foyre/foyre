@@ -241,6 +241,12 @@ optional Ingress, a PVC for SQLite (or pass `database.url` to point
 at Postgres), and runs an idempotent seed Job that creates the
 initial admin.
 
+Published images: after [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre)
+secrets are configured in GitHub Actions, pushes to a branch publish
+`zfeldstein/foyre:<branch>` and `zfeldstein/foyre:sha-<short>`; pushes to
+`main` also update `zfeldstein/foyre:latest`; git tags `v*` publish semver
+tags. See [CONTRIBUTING.md](./CONTRIBUTING.md) for CI details.
+
 Build the image yourself with `docker build -t foyre:dev .` if you'd
 rather not pull from a registry.
 

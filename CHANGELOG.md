@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- GitHub Actions: CI workflow (frontend build, Python compile, Helm lint)
+  and a container workflow that builds multi-arch images on pull requests
+  (no push) and publishes `zfeldstein/foyre` from pushes and tags.
+
 ### Changed
 - Relicensed from the Business Source License 1.1 to the Apache License,
   Version 2.0. Foyre is now permissively open source — commercial use is
