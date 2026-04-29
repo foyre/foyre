@@ -1,0 +1,83 @@
+{{- if .Values.seed.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Suffix with revision so the same chart can be re-applied without
+  # tripping the "field is immutable" Job restrictions.
+  name: {{ include "foyre.fullname" . }}-seed-{{ .Release.Revision }}
+  labels: {{- include "foyre.labels" . | nindent 4 }}
+  annotations:
+    # Run after the Secret + PVC are in place, before the Deployment is
+    # rolled. `python -m app.seed` is idempotent — running it on every
+    # upgrade is cheap and lets you ratchet seed values forward.
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels: {{- include "foyre.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "foyre.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: seed
+          image: {{ include "foyre.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["python", "-m", "app.seed"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.database.existingSecret }}
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.existingSecretKey }}
+                  {{- else }}
+                  name: {{ include "foyre.dbSecretName" . }}
+                  key: DATABASE_URL
+                  {{- end }}
+            - name: APP_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "foyre.appSecretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.appSecretKey }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "foyre.appSecretName" . }}
+                  key: {{ .Values.secrets.existingSecretKeys.jwtSecret }}
+            - name: SEED_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "foyre.seedSecretName" . }}
+                  key: SEED_ADMIN_USERNAME
+            - name: SEED_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "foyre.seedSecretName" . }}
+                  key: SEED_ADMIN_PASSWORD
+            - name: SEED_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "foyre.seedSecretName" . }}
+                  key: SEED_ADMIN_EMAIL
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+          {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "foyre.pvcName" . }}
+      {{- end }}
+{{- end }}

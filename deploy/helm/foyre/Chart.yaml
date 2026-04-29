@@ -1,0 +1,35 @@
+apiVersion: v2
+name: foyre
+description: |
+  Foyre — an internal front door for AI application requests.
+  Structured intake, deterministic risk classification, role-aware review,
+  and per-request isolated Kubernetes virtual clusters for hands-on
+  validation.
+type: application
+
+# Bumped together with chart template changes.
+version: 0.1.0
+
+# The Foyre application version this chart packages by default.
+appVersion: "0.1.0"
+
+home: https://github.com/foyre/foyre
+sources:
+  - https://github.com/foyre/foyre
+maintainers:
+  - name: Zack Feldstein
+    email: hello@foyre.ai
+
+icon: https://raw.githubusercontent.com/foyre/foyre/main/frontend/public/foyre-logo.png
+
+keywords:
+  - ai
+  - governance
+  - intake
+  - kubernetes
+  - vcluster
+  - review-workflow
+
+# License of the chart contents (matches the project).
+annotations:
+  artifacthub.io/license: Apache-2.0

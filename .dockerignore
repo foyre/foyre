@@ -1,0 +1,55 @@
+# VCS
+.git/
+.github/
+
+# Local env / data — never bake into image
+**/.env
+**/.env.*
+!**/.env.example
+**/*.db
+**/*.db-journal
+**/*.sqlite
+**/*.sqlite3
+
+# Build artifacts and caches
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/.venv/
+**/venv/
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/*.tsbuildinfo
+
+# Editor / OS
+**/.DS_Store
+**/.idea/
+**/.vscode/
+**/.cursor/
+**/*.swp
+**/*.swo
+**/*~
+
+# Local kubeconfigs — never bake into image
+kubeconfig
+*.kubeconfig
+rke2.yaml
+
+# Docs / dev artifacts not needed at runtime
+# (LICENSE and NOTICE are NOT excluded — Apache 2.0 attribution.)
+README.md
+CONTRIBUTING.md
+SECURITY.md
+CODE_OF_CONDUCT.md
+CHANGELOG.md
+DEPLOY.md
+deploy/
+Makefile
+.gitignore
+.dockerignore

@@ -1,0 +1,20 @@
+{{- if eq (include "foyre.shouldCreatePVC" .) "true" -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "foyre.pvcName" . }}
+  labels: {{- include "foyre.labels" . | nindent 4 }}
+  # Keep persistent data when the release is uninstalled; the user can
+  # delete the PVC manually if they're sure they don't want it.
+  annotations:
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    - {{ .Values.persistence.accessMode | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size | quote }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

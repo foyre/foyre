@@ -1,0 +1,55 @@
+Foyre {{ .Chart.AppVersion }} has been installed.
+
+Release name:    {{ .Release.Name }}
+Namespace:       {{ .Release.Namespace }}
+Replicas:        {{ .Values.replicaCount }}
+Image:           {{ include "foyre.image" . }}
+Database:        {{ if .Values.database.existingSecret }}via Secret/{{ .Values.database.existingSecret }}{{ else }}{{ .Values.database.url }}{{ end }}
+
+{{- if .Values.ingress.enabled }}
+
+Web UI URL(s):
+{{- range .Values.ingress.hosts }}
+  - http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+
+The Service is type {{ .Values.service.type }} (no Ingress configured). To
+reach the UI from your laptop:
+
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "foyre.fullname" . }} 8080:{{ .Values.service.port }}
+
+Then open http://localhost:8080
+{{- end }}
+
+{{- if .Values.seed.enabled }}
+
+Initial admin credentials:
+  username: {{ .Values.seed.admin.username }}
+  password: (the value of seed.admin.password from your install)
+
+  >> Change this password after first sign-in. <<
+{{- else }}
+
+Note: seed.enabled=false, so no admin user was created. You'll need to seed
+one out-of-band before signing in.
+{{- end }}
+
+Next steps:
+  1. Sign in as the admin and rotate the seeded password.
+  2. (Optional) Connect a host Kubernetes cluster for validation
+     environments under Administration > Validation environments. The
+     in-app setup guide walks through the required ServiceAccount + RBAC.
+  3. Create your team's user accounts under Administration > Users.
+
+Documentation:
+  - Deployment guide: https://github.com/foyre/foyre/blob/main/DEPLOY.md
+  - Project README:   https://github.com/foyre/foyre
+
+{{- if and (not .Values.secrets.existingSecret) (not .Values.secrets.appSecretKey) }}
+
+Note: a Fernet APP_SECRET_KEY was generated for this release and stored in
+Secret/{{ include "foyre.appSecretName" . }} with helm.sh/resource-policy=keep.
+Back this Secret up — losing it will render any persisted host kubeconfigs
+unreadable.
+{{- end }}

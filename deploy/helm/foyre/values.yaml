@@ -1,0 +1,204 @@
+# Default values for Foyre.
+# This file is YAML — values can be overridden with --values or --set.
+
+## --------------------------------------------------------------------------
+## Image
+## --------------------------------------------------------------------------
+image:
+  repository: ghcr.io/foyre/foyre
+  # Defaults to .Chart.AppVersion if empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+# - name: my-registry-secret
+
+nameOverride: ""
+fullnameOverride: ""
+
+## --------------------------------------------------------------------------
+## Replicas
+## --------------------------------------------------------------------------
+# Foyre uses SQLite by default and is designed as a single instance per
+# organization. Run more than one replica only if you have configured an
+# external Postgres database (database.url). Multiple replicas writing to
+# the same SQLite file will corrupt it.
+replicaCount: 1
+
+## --------------------------------------------------------------------------
+## Service
+## --------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 80
+  # Container port (matches Dockerfile).
+  targetPort: 8000
+
+## --------------------------------------------------------------------------
+## Ingress
+## --------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # nginx.ingress.kubernetes.io/proxy-body-size: 10m
+  hosts:
+    - host: foyre.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - secretName: foyre-tls
+    #   hosts:
+    #     - foyre.example.com
+
+## --------------------------------------------------------------------------
+## Persistence (only used when database.url is the default SQLite URL)
+## --------------------------------------------------------------------------
+persistence:
+  enabled: true
+  # If your cluster has a default StorageClass, leave this blank.
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi
+  # Where the SQLite DB lives inside the pod (matches Dockerfile DATA_DIR).
+  mountPath: /data
+  # Reuse a pre-existing PVC instead of creating one.
+  existingClaim: ""
+
+## --------------------------------------------------------------------------
+## Database
+## --------------------------------------------------------------------------
+database:
+  # Default SQLite URL points at the persistent volume above. Override to
+  # point at a Postgres instance for production deployments:
+  #   url: "postgresql+psycopg://user:pass@postgres:5432/foyre"
+  url: "sqlite:////data/foyre.db"
+  # If `existingSecret` is set, the chart reads DATABASE_URL from that
+  # secret's key (default key: DATABASE_URL) instead of `database.url`.
+  existingSecret: ""
+  existingSecretKey: DATABASE_URL
+
+## --------------------------------------------------------------------------
+## Secrets
+## --------------------------------------------------------------------------
+# Foyre needs two long-lived secrets:
+#   - APP_SECRET_KEY (Fernet) — encrypts kubeconfigs at rest
+#   - JWT_SECRET — signs access tokens
+#
+# By default the chart generates random values on first install and stores
+# them in a Secret it owns. To rotate the JWT secret you can delete the
+# Secret and reinstall (existing sessions will be invalidated). The Fernet
+# key cannot be rotated without re-encrypting persisted kubeconfigs — set
+# it explicitly via values or `existingSecret` if you intend to manage it.
+secrets:
+  # If set, the chart will not create its own Secret; both keys are read
+  # from this existing Secret using `existingSecretKeys` below.
+  existingSecret: ""
+  existingSecretKeys:
+    appSecretKey: APP_SECRET_KEY
+    jwtSecret: JWT_SECRET
+  # Explicit values (only honored when existingSecret is empty). Leaving
+  # them blank causes the chart to generate random values on first install.
+  appSecretKey: ""
+  jwtSecret: ""
+
+## --------------------------------------------------------------------------
+## Initial admin user
+## --------------------------------------------------------------------------
+# The Helm pre-install/post-install hook job runs `python -m app.seed`
+# to create this user if it doesn't already exist. After first login the
+# admin should change this password (Foyre marks the seeded admin as
+# `must_change_password` only when explicitly configured below).
+seed:
+  enabled: true
+  admin:
+    username: admin
+    email: admin@example.com
+    # Initial password. Change before first install for any real
+    # deployment. The password is stored in a Secret; the seed job
+    # consumes it via env var.
+    password: "CHANGE_ME_ON_FIRST_INSTALL"
+
+## --------------------------------------------------------------------------
+## Authentication (auth provider selection)
+## --------------------------------------------------------------------------
+auth:
+  # Currently the only supported value. LDAP/AD/OIDC providers can be added
+  # without changing the chart once they ship in the application.
+  provider: local
+  # JWT token lifetime in minutes (default 8 hours).
+  jwtExpiresMinutes: 480
+
+## --------------------------------------------------------------------------
+## Probes
+## --------------------------------------------------------------------------
+probes:
+  liveness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+## --------------------------------------------------------------------------
+## Resources
+## --------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+## --------------------------------------------------------------------------
+## Pod / container hardening
+## --------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # Foyre does not currently require any cluster permissions on the host
+  # cluster it runs in (host clusters for validation envs are configured
+  # via pasted kubeconfigs). Leave this empty unless you know you need it.
+  automountServiceAccountToken: false
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: [ALL]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+## --------------------------------------------------------------------------
+## Extra environment variables (rarely needed)
+## --------------------------------------------------------------------------
+extraEnv: []
+# - name: APP_ENV
+#   value: production
