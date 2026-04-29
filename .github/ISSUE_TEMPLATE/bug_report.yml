@@ -1,0 +1,91 @@
+name: Bug report
+description: Something isn't working as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as
+        much of the form as you reasonably can — concrete reproduction
+        steps and version information are by far the most helpful.
+
+        **For security issues**, do not file a public issue. See
+        [SECURITY.md](https://github.com/zfeldstein/foyre/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the problem.
+      placeholder: When I clicked X, Y happened instead of Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps to reproduce the behavior.
+      placeholder: |
+        1. Sign in as ...
+        2. Open ...
+        3. Click ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: foyre-version
+    attributes:
+      label: Foyre version / commit
+      placeholder: v0.1.0 or commit SHA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface?
+      multiple: true
+      options:
+        - Web UI
+        - Backend API
+        - Validation environment / vcluster provisioning
+        - Authentication / authorization
+        - Setup / deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        OS, Python version, Node version, browser (if relevant), and any
+        host Kubernetes details (RKE2, EKS, kind, version) if the bug
+        relates to validation environments.
+      placeholder: |
+        OS: Ubuntu 24.04
+        Python: 3.11.6
+        Node: 20.10.0
+        Browser: Firefox 124
+        Host k8s: RKE2 v1.34.3 (1 node)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: |
+        Backend log excerpts (with secrets redacted!), browser console
+        output, screenshots, etc. Use code fences for log text.
+      render: shell

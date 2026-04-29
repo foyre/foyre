@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.venv/
+venv/
+.env
+.env.local
+.env.*.local
+
+# SQLite / local data stores
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editors / OS / IDE configs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+*~
+
+# Local kubeconfigs / credentials — never commit
+kubeconfig
+kubeconfig.yaml
+*.kubeconfig
+rke2.yaml

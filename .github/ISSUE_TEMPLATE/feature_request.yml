@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest a new capability or improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. The most helpful feature requests
+        explain the problem first, then propose an approach. Concrete
+        use cases beat abstractions.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: What can't you do today, or what's painful?
+      placeholder: As a reviewer, I can't easily ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: How might Foyre address this? Sketches and rough ideas welcome.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other ways to solve the same problem, or workarounds you've tried.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, examples from other tools, links — anything else.
