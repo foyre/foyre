@@ -127,17 +127,17 @@ For multiple commits, rebase with `--signoff`.
 
 ### Tests
 
-The project is still building out a formal test suite. Contributions that
-add pytest / Playwright coverage to existing features are welcome. For
-changes that affect workflow, risk rules, or auth, include a test case
-that demonstrates the new behavior even if the rest of that module isn't
-covered yet.
+Backend unit tests live under `backend/tests/` and run with **pytest**
+(`make test` after `make install`, or `pip install -r backend/requirements-dev.txt`
+then `cd backend && pytest`). Cover risk rules and workflow transitions when
+you change those areas. Broader pytest / Playwright coverage is welcome.
 
 ### Typecheck and lint before opening a PR
 
 ```bash
 # Backend
 cd backend && source .venv/bin/activate && python -m compileall app
+make test   # from repo root, after make install
 
 # Frontend
 cd frontend && npx tsc -b --noEmit
@@ -145,11 +145,12 @@ cd frontend && npx tsc -b --noEmit
 
 ### Continuous integration
 
-GitHub Actions runs on every pull request and on pushes to `main`:
+GitHub Actions runs on **every push** to any branch and on **every pull
+request**:
 
-- **CI** (`.github/workflows/ci.yml`) — frontend production build, Python
-  byte-compile of `backend/app`, and `helm lint` / `helm template` for the
-  chart.
+- **CI** (`.github/workflows/ci.yml`) — frontend production build, **pytest**
+  for `backend/tests`, Python byte-compile of `backend/app`, and `helm lint` /
+  `helm template` for the chart.
 - **Container image** (`.github/workflows/container.yml`) — on pull
   requests, builds the multi-arch Docker image **without** pushing (safe for
   forks). On pushes to any branch and on `workflow_dispatch`, logs into
@@ -159,6 +160,29 @@ GitHub Actions runs on every pull request and on pushes to `main`:
 Repository maintainers must configure **Actions secrets**
 `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` for publishes to succeed. Use a
 Docker Hub access token, not your account password.
+
+#### Optional: Helm install on a private runner
+
+After a successful image push, you can run a **real Helm install** on a cluster
+your self-hosted runner can reach (same `kubectl` context the runner uses).
+
+1. Add a **repository variable** `FOYRE_K8S_INTEGRATION` with value `true`.
+2. Register a **self-hosted** runner that has `helm`, `kubectl`, and network
+   access to pull from Docker Hub and to talk to the API server.
+3. Label that runner with `foyre-k8s` (in addition to GitHub’s default
+   `self-hosted` label), **or** set repository variable `FOYRE_RUNNER_LABELS`
+   to a JSON array of labels that uniquely select that runner, for example
+   `["self-hosted","foyre-k8s"]` or `["self-hosted","my-org-k8s"]`.
+4. Ensure the cluster has a default **StorageClass** (the chart requests a PVC
+   for SQLite).
+
+The workflow creates a dedicated namespace `foyre-ci-<run_id>`, installs the
+chart with the **same image tag** GitHub just pushed (`sha-<short>`), hits
+`/healthz` from inside the pod, then **always** uninstalls the release and
+deletes the namespace when the job finishes (success or failure).
+
+If `FOYRE_K8S_INTEGRATION` is unset or not `true`, this job is skipped so
+public forks and environments without a runner do not queue forever.
 
 ## Pull requests
 

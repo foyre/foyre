@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- GitHub Actions: CI workflow (frontend build, Python compile, Helm lint)
+- GitHub Actions: CI workflow (frontend build, **pytest**, Python compile, Helm lint)
   and a container workflow that builds multi-arch images on pull requests
-  (no push) and publishes `zfeldstein/foyre` from pushes and tags.
+  (no push) and publishes `zfeldstein/foyre` from pushes and tags; optional
+  **Helm install + smoke + teardown** on a self-hosted runner when
+  `FOYRE_K8S_INTEGRATION` is enabled.
+- Backend dev dependencies (`requirements-dev.txt`) and initial pytest suite
+  for risk and workflow services.
 
 ### Changed
 - Relicensed from the Business Source License 1.1 to the Apache License,

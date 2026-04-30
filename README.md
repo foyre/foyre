@@ -245,7 +245,9 @@ Published images: after [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre)
 secrets are configured in GitHub Actions, pushes to a branch publish
 `zfeldstein/foyre:<branch>` and `zfeldstein/foyre:sha-<short>`; pushes to
 `main` also update `zfeldstein/foyre:latest`; git tags `v*` publish semver
-tags. See [CONTRIBUTING.md](./CONTRIBUTING.md) for CI details.
+tags. Optional: enable a **Helm install smoke test** on a self-hosted runner
+(see [CONTRIBUTING.md](./CONTRIBUTING.md)). CI runs **pytest** on every push
+and pull request.
 
 Build the image yourself with `docker build -t foyre:dev .` if you'd
 rather not pull from a registry.

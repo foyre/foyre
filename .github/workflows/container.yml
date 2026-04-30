@@ -11,6 +11,12 @@
 #   DOCKERHUB_USERNAME
 #   DOCKERHUB_TOKEN     (Docker Hub access token with Read & Write; do not use your account password)
 #
+# Optional Kubernetes smoke test (after a successful push):
+#   1. Repository variable FOYRE_K8S_INTEGRATION = true (see CONTRIBUTING.md)
+#   2. A self-hosted runner that can reach your cluster with kubectl/helm on PATH
+#   3. Either assign labels [self-hosted, foyre-k8s] to that runner, or set repository
+#      variable FOYRE_RUNNER_LABELS to a JSON array, e.g. ["self-hosted","my-private-runner"]
+#
 name: Container image
 
 on:
@@ -54,7 +60,14 @@ jobs:
   publish:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    outputs:
+      # Same convention as docker/metadata-action type=sha,prefix=sha- (7-char SHA).
+      image_tag: ${{ steps.sha_tag.outputs.tag }}
     steps:
+      - name: Primary image tag for K8s integration tests
+        id: sha_tag
+        run: echo "tag=sha-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
 
       - uses: docker/setup-qemu-action@v3
@@ -91,3 +104,68 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+
+  # Real Helm install against a cluster reachable from your self-hosted runner.
+  # Teardown always runs so the namespace does not leak.
+  helm-e2e:
+    name: Helm install (self-hosted)
+    needs: publish
+    if: >-
+      needs.publish.result == 'success' &&
+      vars.FOYRE_K8S_INTEGRATION == 'true'
+    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted", "foyre-k8s"]') }}
+    env:
+      CI_NAMESPACE: foyre-ci-${{ github.run_id }}
+      CI_RELEASE: foyre-ci-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for image pull (registry propagation)
+        run: sleep 25
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Helm install (atomic rollback on failure)
+        id: install
+        run: |
+          set -euxo pipefail
+          NS="${{ env.CI_NAMESPACE }}"
+          REL="${{ env.CI_RELEASE }}"
+          TAG="${{ needs.publish.outputs.image_tag }}"
+          helm upgrade --install "$REL" deploy/helm/foyre \
+            --namespace "$NS" \
+            --create-namespace \
+            --set image.repository=${{ env.IMAGE_NAME }} \
+            --set "image.tag=${TAG}" \
+            --set seed.admin.password=CiHelmSmokeTemp9Zx \
+            --set persistence.size=1Gi \
+            --set probes.readiness.initialDelaySeconds=3 \
+            --set probes.readiness.periodSeconds=5 \
+            --set probes.liveness.initialDelaySeconds=10 \
+            --atomic \
+            --wait --timeout 25m
+
+      - name: Smoke test (/healthz via pod exec)
+        run: |
+          set -euxo pipefail
+          NS="${{ env.CI_NAMESPACE }}"
+          REL="${{ env.CI_RELEASE }}"
+          kubectl rollout status "deploy/${REL}" -n "$NS" --timeout=300s
+          kubectl exec -n "$NS" "deploy/${REL}" -- \
+            python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/healthz'); assert r.status == 204"
+
+      - name: Teardown (always)
+        if: always()
+        run: |
+          set +e
+          NS="${{ env.CI_NAMESPACE }}"
+          REL="${{ env.CI_RELEASE }}"
+          helm uninstall "$REL" -n "$NS"
+          kubectl delete namespace "$NS" --ignore-not-found --wait=true
+          exit 0
