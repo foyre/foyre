@@ -5,9 +5,9 @@
 ## Image
 ## --------------------------------------------------------------------------
 image:
-  repository: ghcr.io/foyre/foyre
+  repository: zfeldstein/foyre
   # Defaults to .Chart.AppVersion if empty.
-  tag: ""
+  tag: "latest"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -29,7 +29,7 @@ replicaCount: 1
 ## Service
 ## --------------------------------------------------------------------------
 service:
-  type: ClusterIP
+  type: NodePort
   port: 80
   # Container port (matches Dockerfile).
   targetPort: 8000

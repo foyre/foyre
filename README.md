@@ -225,34 +225,118 @@ backend/app/
 
 ## Deployment
 
-Foyre ships as a single container image with a Helm chart for
-Kubernetes deployments. See [DEPLOY.md](./DEPLOY.md) for the full
-guide; the short version:
+Foyre ships as one container image plus a Helm chart under
+[`deploy/helm/foyre`](./deploy/helm/foyre). The chart defaults to pulling
+**[Docker Hub `zfeldstein/foyre`](https://hub.docker.com/r/zfeldstein/foyre)**.
+If `image.tag` is left empty, the chart uses the chart’s `appVersion` as the
+tag (for example `zfeldstein/foyre:0.1.0`).
+
+### Prerequisites (Helm)
+
+- Kubernetes **1.27+** (tested through 1.30).
+- [**Helm 3.10+**](https://helm.sh/docs/intro/install/) and **`kubectl`**
+  configured for your cluster.
+- A **default StorageClass** (the chart requests a PVC for SQLite unless you
+  switch to Postgres). See [DEPLOY.md](./DEPLOY.md) if your cluster has none.
+
+### Helm install
+
+Run these from a clone of this repository so the path `deploy/helm/foyre`
+exists:
 
 ```bash
+git clone https://github.com/zfeldstein/foyre.git
+cd foyre
+
 helm upgrade --install foyre deploy/helm/foyre \
   --namespace foyre --create-namespace \
   --set seed.admin.password='change-me-on-first-login' \
   --wait
 ```
 
-The chart is self-contained: it provisions a Deployment, Service,
-optional Ingress, a PVC for SQLite (or pass `database.url` to point
-at Postgres), and runs an idempotent seed Job that creates the
-initial admin.
+That command:
 
-Published images: after [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre)
-secrets are configured in GitHub Actions, pushes to a branch publish
-`zfeldstein/foyre:<branch>` and `zfeldstein/foyre:sha-<short>`; pushes to
-`main` also update `zfeldstein/foyre:latest`; git tags `v*` publish semver
-tags. Optional: enable a **Helm install smoke test** on a self-hosted runner
-(see [CONTRIBUTING.md](./CONTRIBUTING.md)). CI runs **pytest** on every push
-and pull request.
+- Creates namespace `foyre` (if needed) and release **`foyre`**.
+- Deploys the app **Deployment**, **Service** (`ClusterIP`, name **`foyre`**
+  when the release name is `foyre`), optional **Ingress** (off by default),
+  and a **PVC** for SQLite at `/data`.
+- Runs a **post-install seed Job** that creates the initial admin if missing.
+- Waits for resources to become ready (`--wait`).
 
-Build the image yourself with `docker build -t foyre:dev .` if you'd
-rather not pull from a registry.
+**Set a strong seed password** before any shared or production cluster. You
+can also override the admin username and email; see
+[`deploy/helm/foyre/values.yaml`](./deploy/helm/foyre/values.yaml) under `seed`.
 
-Required environment variables for any deployment:
+**Pin the image tag** (recommended once you know which build you want):
+
+```bash
+helm upgrade --install foyre deploy/helm/foyre \
+  --namespace foyre --create-namespace \
+  --set image.tag=0.1.0 \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+Use `latest`, a **semver tag** from a release, or a **branch / `sha-*` tag**
+published by CI (see [CONTRIBUTING.md](./CONTRIBUTING.md)).
+
+**Use a different registry or repository** only if you are not pulling from
+Docker Hub:
+
+```bash
+helm upgrade --install foyre deploy/helm/foyre \
+  --namespace foyre --create-namespace \
+  --set image.repository=my.registry.example/foyre \
+  --set image.tag=1.2.3 \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+Add `--set imagePullSecrets[0].name=...` if the cluster needs credentials to
+pull the image.
+
+### Open the UI after install
+
+The Service is `ClusterIP`. From your machine:
+
+```bash
+kubectl --namespace foyre port-forward svc/foyre 8080:80
+```
+
+Then open <http://localhost:8080> and sign in as **`admin`** with the password
+you passed in `seed.admin.password`. Change it immediately under your account
+menu.
+
+### Beyond the defaults
+
+For **Postgres**, **Ingress / TLS**, supplying your own **Fernet / JWT**
+secrets, multiple replicas, upgrades, and backups, use
+[**DEPLOY.md**](./DEPLOY.md).
+
+### Build the image locally
+
+If you are not pulling from a registry:
+
+```bash
+docker build -t foyre:dev .
+```
+
+Point Helm at it with `--set image.repository=...` and `--set image.tag=...`,
+or load the image into **kind** / **minikube** and set `imagePullPolicy` to
+`Never` / `IfNotPresent` as appropriate.
+
+### CI-built images
+
+When [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre) credentials are
+configured in GitHub Actions, pushes publish tags such as **`main`**,
+**`latest`** (on `main` only), **`sha-<short>`**, and semver tags for **`v*`
+git tags**. Optional: a **Helm smoke install** on a private runner when
+`FOYRE_K8S_INTEGRATION` is enabled ([CONTRIBUTING.md](./CONTRIBUTING.md)).
+**pytest** runs on every push and pull request.
+
+### Environment variables (reference)
+
+Inside the container the chart wires (or you override) the usual settings:
 
 | Variable             | Purpose                                                           |
 |----------------------|-------------------------------------------------------------------|

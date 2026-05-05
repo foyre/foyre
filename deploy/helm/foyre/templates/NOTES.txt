@@ -43,8 +43,8 @@ Next steps:
   3. Create your team's user accounts under Administration > Users.
 
 Documentation:
-  - Deployment guide: https://github.com/foyre/foyre/blob/main/DEPLOY.md
-  - Project README:   https://github.com/foyre/foyre
+  - Deployment guide: https://github.com/zfeldstein/foyre/blob/main/DEPLOY.md
+  - Project README:   https://github.com/zfeldstein/foyre
 
 {{- if and (not .Values.secrets.existingSecret) (not .Values.secrets.appSecretKey) }}
 
