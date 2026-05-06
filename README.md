@@ -226,10 +226,11 @@ backend/app/
 ## Deployment
 
 Foyre ships as one container image plus a Helm chart under
-[`deploy/helm/foyre`](./deploy/helm/foyre). The chart defaults to pulling
-**[Docker Hub `foyre/foyre`](https://hub.docker.com/r/foyre/foyre)**.
+[`deploy/helm/foyre`](./deploy/helm/foyre). **Source code** lives at
+[github.com/foyre/foyre](https://github.com/foyre/foyre); the chart defaults to pulling the
+**[Docker Hub `zfeldstein/foyre`](https://hub.docker.com/r/zfeldstein/foyre)** image.
 If `image.tag` is left empty, the chart uses the chart’s `appVersion` as the
-tag (for example `foyre/foyre:0.1.0`).
+tag (for example `zfeldstein/foyre:0.1.0`).
 
 ### Prerequisites (Helm)
 
@@ -327,7 +328,7 @@ or load the image into **kind** / **minikube** and set `imagePullPolicy` to
 
 ### CI-built images and cluster deploy
 
-When [Docker Hub](https://hub.docker.com/r/foyre/foyre) credentials are
+When [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre) credentials are
 configured, **pushes** (and **`workflow_dispatch`**) run **validate → publish →
 Deploy (Helm)** in [`.github/workflows/container.yml`](./.github/workflows/container.yml):
 pytest and helm lint gate the image build; the image is pushed with tags such as

@@ -4,8 +4,9 @@
 ## --------------------------------------------------------------------------
 ## Image
 ## --------------------------------------------------------------------------
+# Default registry image (Docker Hub). Source repo: https://github.com/foyre/foyre
 image:
-  repository: foyre/foyre
+  repository: zfeldstein/foyre
   # Defaults to .Chart.AppVersion if empty.
   tag: "latest"
   pullPolicy: IfNotPresent

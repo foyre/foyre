@@ -153,8 +153,9 @@ cd frontend && npx tsc -b --noEmit
 - **Pushes and `workflow_dispatch`** — **Container image** workflow runs the full
   pipeline in order:
   1. **Validate** — same checks as CI (frontend build, pytest, helm lint).
-  2. **Publish** — build and push `foyre/foyre` to Docker Hub (branch,
-     `sha-<short>`, semver tags for `v*`, `latest` on `main`).
+  2. **Publish** — build and push **`zfeldstein/foyre`** on Docker Hub (branch,
+     `sha-<short>`, semver tags for `v*`, `latest` on `main`). Source repository:
+     **github.com/foyre/foyre**.
   3. **Deploy (Helm + NodePort)** — self-hosted runner: `helm upgrade --install`
      with the image tag from step 2, **`service.type=NodePort`**, then prints the
      assigned NodePort for manual testing. Skipped only if repository variable

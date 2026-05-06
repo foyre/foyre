@@ -36,8 +36,9 @@ concurrency:
 permissions:
   contents: read
 
+# Docker Hub image (source code: https://github.com/foyre/foyre).
 env:
-  IMAGE_NAME: foyre/foyre
+  IMAGE_NAME: zfeldstein/foyre
 
 jobs:
   # Gate for image build + push: tests and chart sanity (push / dispatch only).

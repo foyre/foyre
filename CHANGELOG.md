@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GitHub Actions: CI workflow (frontend build, **pytest**, Python compile, Helm lint)
   and a container workflow that builds multi-arch images on pull requests
-  (no push) and publishes `foyre/foyre` from pushes and tags; optional
+  (no push) and publishes `zfeldstein/foyre` from pushes and tags; optional
   **Helm install + smoke + teardown** on a self-hosted runner when
   `FOYRE_K8S_INTEGRATION` is enabled; optional **persistent Helm deploy** per
   branch (`FOYRE_AUTO_DEPLOY`) and **cleanup of feature namespaces** when a PR
