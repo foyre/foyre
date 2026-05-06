@@ -17,14 +17,13 @@
 #   3. Either assign labels [self-hosted, foyre-k8s] to that runner, or set repository
 #      variable FOYRE_RUNNER_LABELS to a JSON array, e.g. ["self-hosted","my-private-runner"]
 #
-# Optional continuous deploy (after a successful image push):
-#   1. Repository variable FOYRE_AUTO_DEPLOY = true
-#   2. Self-hosted runner with kubeconfig (default path /home/ubuntu/rke2.yaml), or set
-#      repository variable FOYRE_KUBECONFIG_PATH
-#   3. Branch pushes (not main): Helm installs into namespace foyre-<sanitized-branch>
-#   4. main or git tag v*: namespace foyre
-#   5. When a PR into main is merged, workflow cleanup-feature-namespace.yml removes the
-#      feature branch namespace (see scripts/ci/k8s-deploy-namespace.sh).
+# Continuous Helm deploy (after a successful image push):
+#   - On github.com/zfeldstein/foyre, deploy runs by default after publish (no variable required).
+#   - Set repository variable FOYRE_AUTO_DEPLOY=false to turn it off on that repo.
+#   - On forks / other repos, set FOYRE_AUTO_DEPLOY=true to enable.
+#   - Self-hosted runner with kubeconfig (default /home/ubuntu/rke2.yaml), or FOYRE_KUBECONFIG_PATH.
+#   - Branch pushes (not main): namespace foyre-<sanitized-branch>; main or git tag v*: namespace foyre
+#   - When a PR into main is merged, cleanup-feature-namespace.yml removes the feature namespace.
 #
 name: Container image
 
@@ -120,7 +119,8 @@ jobs:
     needs: publish
     if: >-
       needs.publish.result == 'success' &&
-      vars.FOYRE_AUTO_DEPLOY == 'true'
+      vars.FOYRE_AUTO_DEPLOY != 'false' &&
+      (github.repository == 'zfeldstein/foyre' || vars.FOYRE_AUTO_DEPLOY == 'true')
     runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted", "foyre-k8s"]') }}
     env:
       FOYRE_KUBECONFIG_PATH: ${{ vars.FOYRE_KUBECONFIG_PATH }}

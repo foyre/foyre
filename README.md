@@ -337,10 +337,11 @@ Optional automation on a **self-hosted** runner (see
 
 - **`FOYRE_K8S_INTEGRATION`** — ephemeral Helm install in `foyre-ci-<run_id>`,
   then tear down after smoke checks.
-- **`FOYRE_AUTO_DEPLOY`** — after each push, **`helm upgrade --install`** into
-  **`foyre`** for `main` / version tags, or into **`foyre-<branch>`** for
-  feature branches (kubeconfig default **`/home/ubuntu/rke2.yaml`**). When a
-  PR into **`main`** is **merged**, **`.github/workflows/cleanup-feature-namespace.yml`**
+- **`FOYRE_AUTO_DEPLOY`** — after each push on **`zfeldstein/foyre`**, **`helm upgrade --install`**
+  runs by default into **`foyre`** for `main` / version tags, or **`foyre-<branch>`** for
+  feature branches (kubeconfig default **`/home/ubuntu/rke2.yaml`**). Set the same
+  variable to **`false`** on that repo to disable. On **forks**, set **`FOYRE_AUTO_DEPLOY=true`**
+  to enable deploy and cleanup. When a PR into **`main`** is **merged**, **`.github/workflows/cleanup-feature-namespace.yml`**
   removes the feature branch namespace.
 
 **pytest** runs on every push and pull request.

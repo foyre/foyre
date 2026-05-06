@@ -186,17 +186,28 @@ public forks and environments without a runner do not queue forever.
 
 #### Optional: continuous Helm deploy per branch (`FOYRE_AUTO_DEPLOY`)
 
-To **keep** a Helm release running for integration testing after each push:
+After each successful image **push**, the **Deploy (Helm)** job can install or
+upgrade the chart on a self-hosted runner using the same `sha-<short>` tag
+Docker Hub just received.
 
-1. Set repository variable **`FOYRE_AUTO_DEPLOY`** to **`true`**.
-2. Use the same self-hosted runner setup as above (`FOYRE_RUNNER_LABELS` if you
-   do not use the default `["self-hosted","foyre-k8s"]` labels).
-3. Place a valid **kubeconfig** on the runner. The default path is
-   **`/home/ubuntu/rke2.yaml`**. Override with repository variable
-   **`FOYRE_KUBECONFIG_PATH`** if needed.
-4. (Recommended) Set Actions secret **`FOYRE_DEPLOY_SEED_PASSWORD`** to a strong
-   password for the seeded admin. If unset, a documented placeholder is used
-   (`ChangeMeAfterFirstLogin9Zx` in the workflow); change it after first login.
+**Default on the canonical GitHub repo `zfeldstein/foyre`:** the deploy job
+**runs automatically** — you do **not** need to set `FOYRE_AUTO_DEPLOY`. Set
+repository variable **`FOYRE_AUTO_DEPLOY`** to **`false`** on that repo if you
+want to turn deploy off.
+
+**Forks and other repositories:** set **`FOYRE_AUTO_DEPLOY`** to **`true`**
+to enable deploy and namespace cleanup.
+
+Use the same self-hosted runner setup as the smoke test (`FOYRE_RUNNER_LABELS`
+if you do not use the default `["self-hosted","foyre-k8s"]` labels).
+
+Place a valid **kubeconfig** on the runner. The default path is
+**`/home/ubuntu/rke2.yaml`**. Override with repository variable
+**`FOYRE_KUBECONFIG_PATH`** if needed.
+
+(Recommended) Set Actions secret **`FOYRE_DEPLOY_SEED_PASSWORD`** to a strong
+password for the seeded admin. If unset, the workflow uses a placeholder
+documented in `.github/workflows/container.yml`; change it after first login.
 
 **Namespace rules** (see `scripts/ci/k8s-deploy-namespace.sh` — must stay in sync
 with cleanup):
