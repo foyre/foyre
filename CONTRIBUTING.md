@@ -8,7 +8,7 @@ By participating you agree to our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Reporting bugs and requesting features
 
-- Search [existing issues](https://github.com/zfeldstein/foyre/issues)
+- Search [existing issues](https://github.com/foyre/foyre/issues)
   before opening a new one.
 - **Bugs**: include what you ran, what you expected, and what happened.
   Versions help (Python, Node, OS, k8s distribution).
@@ -31,7 +31,7 @@ By participating you agree to our [Code of Conduct](./CODE_OF_CONDUCT.md).
 ### First-time setup
 
 ```bash
-git clone https://github.com/zfeldstein/foyre.git
+git clone https://github.com/foyre/foyre.git
 cd foyre
 make install           # creates backend/.venv and installs deps
 make front-install     # installs frontend deps
@@ -145,21 +145,31 @@ cd frontend && npx tsc -b --noEmit
 
 ### Continuous integration
 
-GitHub Actions runs on **every push** to any branch and on **every pull
-request**:
+- **Pull requests** — **CI** (`.github/workflows/ci.yml`) runs: frontend production
+  build, **pytest** for `backend/tests`, Python byte-compile, and `helm lint` /
+  `helm template`. **Container image** (`.github/workflows/container.yml`) runs
+  a multi-arch **Docker build without push** (safe for forks).
 
-- **CI** (`.github/workflows/ci.yml`) — frontend production build, **pytest**
-  for `backend/tests`, Python byte-compile of `backend/app`, and `helm lint` /
-  `helm template` for the chart.
-- **Container image** (`.github/workflows/container.yml`) — on pull
-  requests, builds the multi-arch Docker image **without** pushing (safe for
-  forks). On pushes to any branch and on `workflow_dispatch`, logs into
-  Docker Hub and pushes `zfeldstein/foyre` with tags derived from the
-  branch name, short SHA, and (for `v*` git tags) semver labels.
+- **Pushes and `workflow_dispatch`** — **Container image** workflow runs the full
+  pipeline in order:
+  1. **Validate** — same checks as CI (frontend build, pytest, helm lint).
+  2. **Publish** — build and push `foyre/foyre` to Docker Hub (branch,
+     `sha-<short>`, semver tags for `v*`, `latest` on `main`).
+  3. **Deploy (Helm + NodePort)** — self-hosted runner: `helm upgrade --install`
+     with the image tag from step 2, **`service.type=NodePort`**, then prints the
+     assigned NodePort for manual testing. Skipped only if repository variable
+     **`FOYRE_AUTO_DEPLOY`** is set to **`false`**.
 
 Repository maintainers must configure **Actions secrets**
 `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` for publishes to succeed. Use a
 Docker Hub access token, not your account password.
+
+**Self-hosted runner:** deploy and cleanup jobs default to **`runs-on: ["self-hosted"]`**.
+If you use extra labels (e.g. `foyre-k8s`), set repository variable
+**`FOYRE_RUNNER_LABELS`** to a JSON array, e.g. `["self-hosted","foyre-k8s"]`.
+
+**Kubeconfig** on the runner defaults to **`/home/ubuntu/rke2.yaml`**; override with
+**`FOYRE_KUBECONFIG_PATH`** if needed.
 
 #### Optional: ephemeral Helm smoke (`FOYRE_K8S_INTEGRATION`)
 
@@ -167,66 +177,31 @@ After a successful image push, you can run a **throwaway** Helm install on a clu
 your self-hosted runner can reach (same `kubectl` context the runner uses).
 
 1. Add a **repository variable** `FOYRE_K8S_INTEGRATION` with value `true`.
-2. Register a **self-hosted** runner that has `helm`, `kubectl`, and network
-   access to pull from Docker Hub and to talk to the API server.
-3. Label that runner with `foyre-k8s` (in addition to GitHub’s default
-   `self-hosted` label), **or** set repository variable `FOYRE_RUNNER_LABELS`
-   to a JSON array of labels that uniquely select that runner, for example
-   `["self-hosted","foyre-k8s"]` or `["self-hosted","my-org-k8s"]`.
-4. Ensure the cluster has a default **StorageClass** (the chart requests a PVC
+2. The runner needs `helm`, `kubectl`, and network access to pull from Docker Hub
+   and to talk to the API server (same defaults as deploy: `FOYRE_RUNNER_LABELS`,
+   `FOYRE_KUBECONFIG_PATH`).
+3. Ensure the cluster has a default **StorageClass** (the chart requests a PVC
    for SQLite).
 
 The workflow creates a dedicated namespace `foyre-ci-<run_id>`, installs the
-chart with the **same image tag** GitHub just pushed (`sha-<short>`), hits
-`/healthz` from inside the pod, then **always** uninstalls the release and
-deletes the namespace when the job finishes (success or failure).
+chart with the **same image tag** GitHub just pushed (`sha-<short>`), uses
+**NodePort** for the Service, hits `/healthz` from inside the pod, then **always**
+uninstalls the release and deletes the namespace when the job finishes.
 
-If `FOYRE_K8S_INTEGRATION` is unset or not `true`, this job is skipped so
-public forks and environments without a runner do not queue forever.
+If `FOYRE_K8S_INTEGRATION` is unset or not `true`, this job is skipped.
 
-#### Optional: continuous Helm deploy per branch (`FOYRE_AUTO_DEPLOY`)
+#### Namespace cleanup on merge (`cleanup-feature-namespace.yml`)
 
-After each successful image **push**, the **Deploy (Helm)** job can install or
-upgrade the chart on a self-hosted runner using the same `sha-<short>` tag
-Docker Hub just received.
+When a PR into **`main`** is **merged**, **`.github/workflows/cleanup-feature-namespace.yml`**
+removes the **`foyre-<branch>`** namespace used for that head branch (same naming as
+`scripts/ci/k8s-deploy-namespace.sh`). It never deletes the production **`foyre`**
+namespace. Disabled when **`FOYRE_AUTO_DEPLOY=false`**.
 
-**Default on the canonical GitHub repo `zfeldstein/foyre`:** the deploy job
-**runs automatically** — you do **not** need to set `FOYRE_AUTO_DEPLOY`. Set
-repository variable **`FOYRE_AUTO_DEPLOY`** to **`false`** on that repo if you
-want to turn deploy off.
+(Recommended) Set Actions secret **`FOYRE_DEPLOY_SEED_PASSWORD`** for the seeded
+admin used by the deploy job. If unset, the workflow uses a placeholder documented
+in `.github/workflows/container.yml`.
 
-**Forks and other repositories:** set **`FOYRE_AUTO_DEPLOY`** to **`true`**
-to enable deploy and namespace cleanup.
-
-Use the same self-hosted runner setup as the smoke test (`FOYRE_RUNNER_LABELS`
-if you do not use the default `["self-hosted","foyre-k8s"]` labels).
-
-Place a valid **kubeconfig** on the runner. The default path is
-**`/home/ubuntu/rke2.yaml`**. Override with repository variable
-**`FOYRE_KUBECONFIG_PATH`** if needed.
-
-(Recommended) Set Actions secret **`FOYRE_DEPLOY_SEED_PASSWORD`** to a strong
-password for the seeded admin. If unset, the workflow uses a placeholder
-documented in `.github/workflows/container.yml`; change it after first login.
-
-**Namespace rules** (see `scripts/ci/k8s-deploy-namespace.sh` — must stay in sync
-with cleanup):
-
-| Git ref | Namespace |
-|---------|-----------|
-| `main` branch or any **`v*`** git tag push | `foyre` |
-| Any other branch | `foyre-<sanitized-branch>` (slashes → hyphens, lowercased, max 63 chars) |
-
-The Helm release name is always **`foyre`** inside that namespace.
-
-**Cleanup when a feature PR merges into `main`:** workflow
-**`.github/workflows/cleanup-feature-namespace.yml`** runs on `pull_request`
-`closed` when the PR was **merged**, **base** is **`main`**, and the head branch
-is not `main`. It resolves the same `foyre-<branch>` namespace and runs
-`helm uninstall` plus `kubectl delete namespace`. It **never** deletes the
-`foyre` namespace from that workflow (defense in depth).
-
-If you merge without a PR (push merge locally), no cleanup workflow runs; delete
+If you merge without a PR (local merge + push), no cleanup workflow runs; delete
 the branch namespace manually if needed.
 
 ## Pull requests

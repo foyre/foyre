@@ -13,14 +13,14 @@ version: 0.1.0
 # The Foyre application version this chart packages by default.
 appVersion: "0.1.0"
 
-home: https://github.com/zfeldstein/foyre
+home: https://github.com/foyre/foyre
 sources:
-  - https://github.com/zfeldstein/foyre
+  - https://github.com/foyre/foyre
 maintainers:
   - name: Zack Feldstein
     email: hello@foyre.ai
 
-icon: https://raw.githubusercontent.com/zfeldstein/foyre/main/foyre-logo.png
+icon: https://raw.githubusercontent.com/foyre/foyre/main/foyre-logo.png
 
 keywords:
   - ai

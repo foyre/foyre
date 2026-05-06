@@ -1,8 +1,7 @@
 # When a PR into main is merged, remove the Helm release and namespace that
 # branch-based deploys used (see container.yml deploy-k8s job).
 #
-# After publish on zfeldstein/foyre, deploy runs by default (see container.yml deploy-k8s).
-# Set FOYRE_AUTO_DEPLOY=false to disable. Forks: set FOYRE_AUTO_DEPLOY=true to enable cleanup.
+# Deploy is controlled like container.yml: cleanup runs unless FOYRE_AUTO_DEPLOY=false.
 #
 name: Cleanup feature namespace
 
@@ -20,9 +19,8 @@ jobs:
       github.event.pull_request.base.ref == 'main' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.head_ref != 'main' &&
-      vars.FOYRE_AUTO_DEPLOY != 'false' &&
-      (github.repository == 'zfeldstein/foyre' || vars.FOYRE_AUTO_DEPLOY == 'true')
-    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted", "foyre-k8s"]') }}
+      vars.FOYRE_AUTO_DEPLOY != 'false'
+    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted"]') }}
     steps:
       - uses: actions/checkout@v4
 

@@ -1,29 +1,24 @@
-# Build and push the production image to Docker Hub.
+# CI/CD: tests → Docker Hub → Helm upgrade on cluster (self-hosted).
 #
 # Triggers:
-#   - push to any branch  → tags = branch name + short SHA (feature branches consumable elsewhere)
-#   - push to main        → also :latest
-#   - push tag v*         → semver tags (e.g. 1.2.3, v1.2.3) + :latest
-#   - pull_request        → build only (no registry access; safe for fork PRs)
-#   - workflow_dispatch   → same publish rules as a branch push
+#   - push / workflow_dispatch: unit tests + frontend build + helm lint, then
+#     build/push image, then Helm deploy (unless FOYRE_AUTO_DEPLOY=false).
+#   - pull_request: `ci.yml` runs tests + helm; this workflow runs `build-verify` (Docker build, no push).
 #
-# Required repository secrets for publish jobs (Settings → Secrets → Actions):
-#   DOCKERHUB_USERNAME
-#   DOCKERHUB_TOKEN     (Docker Hub access token with Read & Write; do not use your account password)
+# Push / dispatch pipeline:
+#   1. validate — pytest, compileall, frontend production build, helm lint/template
+#   2. publish — build and push multi-arch image to Docker Hub
+#   3. deploy-k8s — helm upgrade --install with image tag from (2), service NodePort
 #
-# Optional Kubernetes smoke test (after a successful push):
-#   1. Repository variable FOYRE_K8S_INTEGRATION = true (see CONTRIBUTING.md)
-#   2. A self-hosted runner that can reach your cluster with kubectl/helm on PATH
-#   3. Either assign labels [self-hosted, foyre-k8s] to that runner, or set repository
-#      variable FOYRE_RUNNER_LABELS to a JSON array, e.g. ["self-hosted","my-private-runner"]
+# Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
+# Optional secret: FOYRE_DEPLOY_SEED_PASSWORD (seed admin password)
 #
-# Continuous Helm deploy (after a successful image push):
-#   - On github.com/zfeldstein/foyre, deploy runs by default after publish (no variable required).
-#   - Set repository variable FOYRE_AUTO_DEPLOY=false to turn it off on that repo.
-#   - On forks / other repos, set FOYRE_AUTO_DEPLOY=true to enable.
-#   - Self-hosted runner with kubeconfig (default /home/ubuntu/rke2.yaml), or FOYRE_KUBECONFIG_PATH.
-#   - Branch pushes (not main): namespace foyre-<sanitized-branch>; main or git tag v*: namespace foyre
-#   - When a PR into main is merged, cleanup-feature-namespace.yml removes the feature namespace.
+# Repository variables:
+#   FOYRE_AUTO_DEPLOY     unset or anything except "false" = run Helm deploy after push
+#   FOYRE_RUNNER_LABELS   JSON array for deploy job, default ["self-hosted"]
+#   FOYRE_KUBECONFIG_PATH kubeconfig path on runner (default /home/ubuntu/rke2.yaml)
+#
+# Optional ephemeral smoke (separate): FOYRE_K8S_INTEGRATION=true → helm-e2e job
 #
 name: Container image
 
@@ -42,10 +37,57 @@ permissions:
   contents: read
 
 env:
-  IMAGE_NAME: zfeldstein/foyre
+  IMAGE_NAME: foyre/foyre
 
 jobs:
-  # Verifies the Dockerfile on every PR without using registry credentials.
+  # Gate for image build + push: tests and chart sanity (push / dispatch only).
+  validate:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    name: Validate (tests + chart)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend production build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Backend install (runtime + dev)
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Unit tests (pytest)
+        working-directory: backend
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Byte-compile backend
+        run: python -m compileall -q backend/app
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - name: Helm lint + template
+        run: |
+          helm lint deploy/helm/foyre
+          helm template foyre-ci deploy/helm/foyre --namespace foyre-ci > /tmp/rendered.yaml
+
+  # PRs: Docker build only (no push, no cluster).
   build-verify:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -66,13 +108,18 @@ jobs:
           cache-to: type=gha,mode=max
 
   publish:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: [validate]
+    # `always()` so this job is evaluated when `validate` is skipped (e.g. PR); then the
+    # result check ensures we only publish after a real successful validate on push/dispatch.
+    if: >-
+      always() &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      needs.validate.result == 'success'
     runs-on: ubuntu-latest
     outputs:
-      # Same convention as docker/metadata-action type=sha,prefix=sha- (7-char SHA).
       image_tag: ${{ steps.sha_tag.outputs.tag }}
     steps:
-      - name: Primary image tag for K8s integration tests
+      - name: Primary image tag for Helm deploy
         id: sha_tag
         run: echo "tag=sha-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
@@ -113,15 +160,14 @@ jobs:
           provenance: mode=max
           sbom: true
 
-  # Long-lived Helm deploy for manual / integration testing (same image tag as publish).
   deploy-k8s:
-    name: Deploy (Helm)
-    needs: publish
+    name: Deploy (Helm + NodePort)
+    needs: [publish]
     if: >-
+      always() &&
       needs.publish.result == 'success' &&
-      vars.FOYRE_AUTO_DEPLOY != 'false' &&
-      (github.repository == 'zfeldstein/foyre' || vars.FOYRE_AUTO_DEPLOY == 'true')
-    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted", "foyre-k8s"]') }}
+      vars.FOYRE_AUTO_DEPLOY != 'false'
+    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted"]') }}
     env:
       FOYRE_KUBECONFIG_PATH: ${{ vars.FOYRE_KUBECONFIG_PATH }}
     steps:
@@ -152,9 +198,9 @@ jobs:
           set -euo pipefail
           NS="$(bash scripts/ci/k8s-deploy-namespace.sh "${{ github.ref_name }}" "${{ github.ref_type }}")"
           echo "namespace=$NS" >> "$GITHUB_OUTPUT"
-          echo "Helm release 'foyre' → namespace $NS (image tag ${{ needs.publish.outputs.image_tag }})"
+          echo "Helm release foyre → namespace $NS | image ${{ env.IMAGE_NAME }}:${{ needs.publish.outputs.image_tag }}"
 
-      - name: Helm upgrade --install
+      - name: Helm upgrade --install (image + NodePort service)
         env:
           DEPLOY_SEED: ${{ secrets.FOYRE_DEPLOY_SEED_PASSWORD }}
         run: |
@@ -167,12 +213,13 @@ jobs:
             --create-namespace \
             --set image.repository=${{ env.IMAGE_NAME }} \
             --set "image.tag=${TAG}" \
+            --set service.type=NodePort \
             --set-string "seed.admin.password=${PW}" \
             --set persistence.size=1Gi \
             --atomic \
             --wait --timeout 25m
 
-      - name: Smoke test (/healthz)
+      - name: Rollout + in-cluster /healthz
         run: |
           set -euxo pipefail
           NS="${{ steps.target.outputs.namespace }}"
@@ -180,20 +227,38 @@ jobs:
           kubectl exec -n "$NS" deploy/foyre -- \
             python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/healthz'); assert r.status == 204"
 
-  # Real Helm install against a cluster reachable from your self-hosted runner.
-  # Teardown always runs so the namespace does not leak.
+      - name: Show NodePort (manual validation)
+        run: |
+          set -euxo pipefail
+          NS="${{ steps.target.outputs.namespace }}"
+          echo "=== Service (NodePort) ==="
+          kubectl get svc foyre -n "$NS" -o wide
+          NP="$(kubectl get svc foyre -n "$NS" -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')"
+          echo ""
+          echo "NodePort: $NP"
+          echo "On a node IP, open: http://<NODE_IP>:$NP/"
+
   helm-e2e:
-    name: Helm install (self-hosted)
-    needs: publish
+    name: Helm smoke (ephemeral namespace)
+    needs: [publish]
     if: >-
+      always() &&
       needs.publish.result == 'success' &&
       vars.FOYRE_K8S_INTEGRATION == 'true'
-    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted", "foyre-k8s"]') }}
+    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted"]') }}
     env:
       CI_NAMESPACE: foyre-ci-${{ github.run_id }}
       CI_RELEASE: foyre-ci-${{ github.run_id }}
+      FOYRE_KUBECONFIG_PATH: ${{ vars.FOYRE_KUBECONFIG_PATH }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          set -euo pipefail
+          KCFG="${FOYRE_KUBECONFIG_PATH:-/home/ubuntu/rke2.yaml}"
+          test -f "$KCFG" || { echo "::error::Kubeconfig not found at $KCFG"; exit 1; }
+          echo "KUBECONFIG=$KCFG" >> "$GITHUB_ENV"
 
       - name: Wait for image pull (registry propagation)
         run: sleep 25
@@ -218,6 +283,7 @@ jobs:
             --create-namespace \
             --set image.repository=${{ env.IMAGE_NAME }} \
             --set "image.tag=${TAG}" \
+            --set service.type=NodePort \
             --set seed.admin.password=CiHelmSmokeTemp9Zx \
             --set persistence.size=1Gi \
             --set probes.readiness.initialDelaySeconds=3 \

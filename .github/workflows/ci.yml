@@ -1,8 +1,7 @@
-# Fast checks on every push and pull request. Does not publish images.
+# Fast checks on pull requests only. Pushes use `container.yml` (validate job).
 name: CI
 
 on:
-  push:
   pull_request:
 
 concurrency:

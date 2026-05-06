@@ -5,7 +5,7 @@
 ## Image
 ## --------------------------------------------------------------------------
 image:
-  repository: zfeldstein/foyre
+  repository: foyre/foyre
   # Defaults to .Chart.AppVersion if empty.
   tag: "latest"
   pullPolicy: IfNotPresent

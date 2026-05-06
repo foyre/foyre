@@ -76,7 +76,7 @@ ITSM tool — and gives reviewers a way to verify what's being asked for.
 ### 1. Clone, install, and configure
 
 ```bash
-git clone https://github.com/zfeldstein/foyre.git
+git clone https://github.com/foyre/foyre.git
 cd foyre
 make install
 make env
@@ -227,9 +227,9 @@ backend/app/
 
 Foyre ships as one container image plus a Helm chart under
 [`deploy/helm/foyre`](./deploy/helm/foyre). The chart defaults to pulling
-**[Docker Hub `zfeldstein/foyre`](https://hub.docker.com/r/zfeldstein/foyre)**.
+**[Docker Hub `foyre/foyre`](https://hub.docker.com/r/foyre/foyre)**.
 If `image.tag` is left empty, the chart uses the chart’s `appVersion` as the
-tag (for example `zfeldstein/foyre:0.1.0`).
+tag (for example `foyre/foyre:0.1.0`).
 
 ### Prerequisites (Helm)
 
@@ -245,7 +245,7 @@ Run these from a clone of this repository so the path `deploy/helm/foyre`
 exists:
 
 ```bash
-git clone https://github.com/zfeldstein/foyre.git
+git clone https://github.com/foyre/foyre.git
 cd foyre
 
 helm upgrade --install foyre deploy/helm/foyre \
@@ -327,24 +327,24 @@ or load the image into **kind** / **minikube** and set `imagePullPolicy` to
 
 ### CI-built images and cluster deploy
 
-When [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre) credentials are
-configured in GitHub Actions, pushes publish tags such as **`main`**,
-**`latest`** (on `main` only), **`sha-<short>`**, and semver tags for **`v*`
-git tags**.
+When [Docker Hub](https://hub.docker.com/r/foyre/foyre) credentials are
+configured, **pushes** (and **`workflow_dispatch`**) run **validate → publish →
+Deploy (Helm)** in [`.github/workflows/container.yml`](./.github/workflows/container.yml):
+pytest and helm lint gate the image build; the image is pushed with tags such as
+**`sha-<short>`**, **`main`**, **`latest`** (on `main` only), and semver tags for
+**`v*`** git tags. The **Deploy** job runs on your **self-hosted** runner (default
+**`runs-on: ["self-hosted"]`**) and runs **`helm upgrade --install`** with
+**`--set image.tag=<sha>`** and **`service.type=NodePort`**, then prints the
+**NodePort** in the job log for manual checks (`http://<node-ip>:<port>/`).
 
-Optional automation on a **self-hosted** runner (see
-[CONTRIBUTING.md](./CONTRIBUTING.md)):
+Set repository variable **`FOYRE_AUTO_DEPLOY=false`** to skip cluster deploy and
+the merge-time namespace cleanup workflow.
 
-- **`FOYRE_K8S_INTEGRATION`** — ephemeral Helm install in `foyre-ci-<run_id>`,
-  then tear down after smoke checks.
-- **`FOYRE_AUTO_DEPLOY`** — after each push on **`zfeldstein/foyre`**, **`helm upgrade --install`**
-  runs by default into **`foyre`** for `main` / version tags, or **`foyre-<branch>`** for
-  feature branches (kubeconfig default **`/home/ubuntu/rke2.yaml`**). Set the same
-  variable to **`false`** on that repo to disable. On **forks**, set **`FOYRE_AUTO_DEPLOY=true`**
-  to enable deploy and cleanup. When a PR into **`main`** is **merged**, **`.github/workflows/cleanup-feature-namespace.yml`**
-  removes the feature branch namespace.
+Optional: **`FOYRE_K8S_INTEGRATION=true`** enables an ephemeral Helm smoke install
+in `foyre-ci-<run_id>`. **Pull requests** still run [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+for tests plus a non-pushing Docker build in the container workflow.
 
-**pytest** runs on every push and pull request.
+**pytest** runs in CI on PRs and in **validate** on every push before publish.
 
 ### Environment variables (reference)
 

@@ -28,7 +28,7 @@ The Helm chart is at [`deploy/helm/foyre`](./deploy/helm/foyre).
 - A Kubernetes cluster (1.27+ tested against 1.30).
 - `helm` 3.10+ and `kubectl` configured against your cluster.
 - A container registry your cluster can pull from. The chart defaults to
-  **Docker Hub** [`zfeldstein/foyre`](https://hub.docker.com/r/zfeldstein/foyre).
+  **Docker Hub** [`foyre/foyre`](https://hub.docker.com/r/foyre/foyre).
   To build and push your own image:
 
   ```bash
@@ -45,7 +45,7 @@ The Helm chart is at [`deploy/helm/foyre`](./deploy/helm/foyre).
 ## Install — quickest path
 
 ```bash
-git clone https://github.com/zfeldstein/foyre.git
+git clone https://github.com/foyre/foyre.git
 cd foyre
 
 helm upgrade --install foyre deploy/helm/foyre \
@@ -88,7 +88,7 @@ Create a `values-prod.yaml` and fill in your specifics:
 ```yaml
 # values-prod.yaml
 image:
-  repository: zfeldstein/foyre
+  repository: foyre/foyre
   tag: "0.1.0"
 
 replicaCount: 1   # See note below before changing this.
