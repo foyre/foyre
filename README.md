@@ -66,62 +66,78 @@ ITSM tool — and gives reviewers a way to verify what's being asked for.
 
 ## Quick start
 
-**Prerequisites**
+The fastest path is Helm on Kubernetes. Foyre runs as a single container with
+the React UI baked in, so you do not need to run a separate frontend process.
 
-- Python 3.11 or newer
-- Node.js 18 or newer
-- A Kubernetes cluster for validation environments — optional; you can run
-  Foyre without one and skip validation.
+### Option 1: Install With Helm
 
-### 1. Clone, install, and configure
+Prerequisites:
 
-```bash
-git clone https://github.com/foyre/foyre.git
-cd foyre
-make install
-make env
-```
-
-Open `backend/.env` and set `APP_SECRET_KEY` to a freshly-generated
-Fernet key. This key encrypts kubeconfigs at rest; keep it somewhere safe.
+- Kubernetes cluster with a default StorageClass
+- `helm` 3.10+
+- `kubectl` configured for the cluster
 
 ```bash
-python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+helm repo add foyre https://foyre.github.io/foyre/
+helm repo update
+
+helm upgrade --install foyre foyre/foyre \
+  --namespace foyre --create-namespace \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
 ```
 
-### 2. Seed the first admin
+Open the Web UI using the NodePort service:
 
 ```bash
-make seed
+kubectl --namespace foyre get svc foyre
+kubectl get nodes -o wide
 ```
 
-Creates an initial admin user with the credentials set in `backend/.env`
-(defaults: `admin` / `admin`). Change these in `backend/.env` before seeding
-in any shared environment.
+Look for a service port like `80:31234/TCP`, then open:
 
-### 3. Start the services
+```text
+http://<node-ip>:31234/
+```
 
-In two terminals:
+Sign in as `admin` with the password you set in `seed.admin.password`, then
+change it from the user menu.
+
+For local/private access instead of NodePort:
 
 ```bash
-make run       # backend on http://localhost:8000
-make front     # frontend on http://localhost:5173
+kubectl --namespace foyre port-forward svc/foyre 8080:80
 ```
 
-Open <http://localhost:5173> and sign in. You're set up for the intake +
-review workflow without validation environments.
+Then open <http://localhost:8080>.
 
-### 4. (Optional) Connect a host Kubernetes cluster
+### Option 2: Fresh Ubuntu VM / Lab Install
 
-To enable per-request isolated validation environments:
+If you do not already have Kubernetes, use the quickstart script on a fresh
+Ubuntu VM. It installs single-node **k3s**, installs Helm if needed, installs
+Foyre, and prints the Web UI URL and generated admin password.
 
-1. Install the [`vcluster`](https://www.vcluster.com/docs/getting-started/setup)
-   CLI on the machine running Foyre's backend.
-2. Sign in to Foyre as an admin.
-3. Go to **Administration → Validation environments**.
-4. Follow the in-app **Setup guide** to create the service account and
+```bash
+curl -fsSL https://raw.githubusercontent.com/foyre/foyre/main/scripts/quickstart-k3s.sh | bash
+```
+
+To choose your own admin password:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/foyre/foyre/main/scripts/quickstart-k3s.sh \
+  | SEED_ADMIN_PASSWORD='change-me-on-first-login' bash -s
+```
+
+### Connect A Host Kubernetes Cluster
+
+Foyre works without validation environments, but the Kubernetes validation
+workflow needs a host cluster configuration:
+
+1. Sign in to Foyre as an admin.
+2. Go to **Administration → Validation environments**.
+3. Follow the in-app **Setup guide** to create the service account and
    RBAC on your host cluster.
-5. Paste the kubeconfig you minted, click **Test connection**, and save.
+4. Paste the kubeconfig you minted, click **Test connection**, and save.
 
 Once saved, requesters will see a **Create isolated cluster** button on
 their submitted requests.
@@ -418,20 +434,11 @@ Inside the container the chart wires (or you override) the usual settings:
 | `DATABASE_URL`       | SQLAlchemy URL. Defaults to SQLite at `/data/foyre.db` in the container; override for Postgres. |
 | `SEED_ADMIN_*`       | Initial admin credentials. Provided to the seed Job by the chart. |
 
-## Make targets
+## Local Development
 
-| Target              | Effect                                                           |
-|---------------------|------------------------------------------------------------------|
-| `make install`      | Create `backend/.venv` and install backend dependencies.         |
-| `make env`          | Copy `backend/.env.example` to `backend/.env`.                   |
-| `make seed`         | Create the database and the initial admin user (idempotent).    |
-| `make run`          | Run the API on <http://localhost:8000> with auto-reload.        |
-| `make reset`        | Delete the local SQLite database.                                |
-| `make clean`        | `reset` plus remove `backend/.venv`.                             |
-| `make front-install`| Install frontend dependencies.                                   |
-| `make front`        | Run the Vite dev server.                                         |
-
-Swagger UI is available at <http://localhost:8000/docs>.
+The README is optimized for installing and running Foyre. For local Python /
+Node development commands, tests, and contribution workflow, see
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Contributing
 
