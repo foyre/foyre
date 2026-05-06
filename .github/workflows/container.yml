@@ -216,7 +216,6 @@ jobs:
             --set "image.tag=${TAG}" \
             --set service.type=NodePort \
             --set-string "seed.admin.password=${PW}" \
-            --set persistence.size=1Gi \
             --atomic \
             --wait --timeout 25m
 
@@ -286,7 +285,6 @@ jobs:
             --set "image.tag=${TAG}" \
             --set service.type=NodePort \
             --set seed.admin.password=CiHelmSmokeTemp9Zx \
-            --set persistence.size=1Gi \
             --set probes.readiness.initialDelaySeconds=3 \
             --set probes.readiness.periodSeconds=5 \
             --set probes.liveness.initialDelaySeconds=10 \

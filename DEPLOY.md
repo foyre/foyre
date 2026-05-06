@@ -276,6 +276,13 @@ Your cluster has no default StorageClass. Either install one (e.g.
 and re-run the install, or set `persistence.enabled: false` and use
 Postgres.
 
+**`helm upgrade --atomic` fails: PVC storage "can not be less than status.capacity".**
+Kubernetes never allows **shrinking** a PersistentVolumeClaim’s requested size.
+If the release was first installed with a larger `persistence.size` (the chart
+default is **5Gi**), do not pass a smaller `--set persistence.size=...` on
+upgrade — omit the flag so the existing size is preserved, or expand only
+(never reduce) if your StorageClass supports volume expansion.
+
 **Frontend loads but `/api/...` requests get 404 / HTML.**
 This usually means the SPA fallback is catching API routes. Verify by
 calling `kubectl exec` into the pod and `curl localhost:8000/api/auth/login`
