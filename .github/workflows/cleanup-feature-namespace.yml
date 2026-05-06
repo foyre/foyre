@@ -1,0 +1,63 @@
+# When a PR into main is merged, remove the Helm release and namespace that
+# branch-based deploys used (see container.yml deploy-k8s job).
+#
+# Requires: repository variable FOYRE_AUTO_DEPLOY = true, self-hosted runner,
+# kubeconfig at /home/ubuntu/rke2.yaml (or FOYRE_KUBECONFIG_PATH).
+#
+name: Cleanup feature namespace
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref != 'main' &&
+      vars.FOYRE_AUTO_DEPLOY == 'true'
+    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted", "foyre-k8s"]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        env:
+          FOYRE_KUBECONFIG_PATH: ${{ vars.FOYRE_KUBECONFIG_PATH }}
+        run: |
+          set -euo pipefail
+          KCFG="${FOYRE_KUBECONFIG_PATH:-/home/ubuntu/rke2.yaml}"
+          echo "Using KUBECONFIG=$KCFG"
+          test -f "$KCFG" || { echo "::error::Kubeconfig not found at $KCFG"; exit 1; }
+          echo "KUBECONFIG=$KCFG" >> "$GITHUB_ENV"
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Resolve namespace for merged head branch
+        id: ns
+        run: |
+          set -euo pipefail
+          NS="$(bash scripts/ci/k8s-deploy-namespace.sh "${{ github.head_ref }}" branch)"
+          echo "namespace=$NS" >> "$GITHUB_OUTPUT"
+          echo "Will clean namespace: $NS (never touches production 'foyre' for non-main slugs)"
+
+      - name: Uninstall release and delete namespace
+        run: |
+          set -euxo pipefail
+          NS="${{ steps.ns.outputs.namespace }}"
+          if [ "$NS" = "foyre" ]; then
+            echo "::notice::Refusing to delete production namespace foyre from cleanup workflow."
+            exit 0
+          fi
+          helm uninstall foyre -n "$NS" || true
+          kubectl delete namespace "$NS" --ignore-not-found --wait=true

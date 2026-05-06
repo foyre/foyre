@@ -17,6 +17,15 @@
 #   3. Either assign labels [self-hosted, foyre-k8s] to that runner, or set repository
 #      variable FOYRE_RUNNER_LABELS to a JSON array, e.g. ["self-hosted","my-private-runner"]
 #
+# Optional continuous deploy (after a successful image push):
+#   1. Repository variable FOYRE_AUTO_DEPLOY = true
+#   2. Self-hosted runner with kubeconfig (default path /home/ubuntu/rke2.yaml), or set
+#      repository variable FOYRE_KUBECONFIG_PATH
+#   3. Branch pushes (not main): Helm installs into namespace foyre-<sanitized-branch>
+#   4. main or git tag v*: namespace foyre
+#   5. When a PR into main is merged, workflow cleanup-feature-namespace.yml removes the
+#      feature branch namespace (see scripts/ci/k8s-deploy-namespace.sh).
+#
 name: Container image
 
 on:
@@ -104,6 +113,72 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+
+  # Long-lived Helm deploy for manual / integration testing (same image tag as publish).
+  deploy-k8s:
+    name: Deploy (Helm)
+    needs: publish
+    if: >-
+      needs.publish.result == 'success' &&
+      vars.FOYRE_AUTO_DEPLOY == 'true'
+    runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted", "foyre-k8s"]') }}
+    env:
+      FOYRE_KUBECONFIG_PATH: ${{ vars.FOYRE_KUBECONFIG_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          set -euo pipefail
+          KCFG="${FOYRE_KUBECONFIG_PATH:-/home/ubuntu/rke2.yaml}"
+          echo "Using KUBECONFIG=$KCFG"
+          test -f "$KCFG" || { echo "::error::Kubeconfig not found at $KCFG"; exit 1; }
+          echo "KUBECONFIG=$KCFG" >> "$GITHUB_ENV"
+
+      - name: Wait for Docker Hub propagation
+        run: sleep 25
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.14.4
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.30.0
+
+      - name: Target namespace
+        id: target
+        run: |
+          set -euo pipefail
+          NS="$(bash scripts/ci/k8s-deploy-namespace.sh "${{ github.ref_name }}" "${{ github.ref_type }}")"
+          echo "namespace=$NS" >> "$GITHUB_OUTPUT"
+          echo "Helm release 'foyre' → namespace $NS (image tag ${{ needs.publish.outputs.image_tag }})"
+
+      - name: Helm upgrade --install
+        env:
+          DEPLOY_SEED: ${{ secrets.FOYRE_DEPLOY_SEED_PASSWORD }}
+        run: |
+          set -euxo pipefail
+          NS="${{ steps.target.outputs.namespace }}"
+          TAG="${{ needs.publish.outputs.image_tag }}"
+          PW="${DEPLOY_SEED:-ChangeMeAfterFirstLogin9Zx}"
+          helm upgrade --install foyre deploy/helm/foyre \
+            --namespace "$NS" \
+            --create-namespace \
+            --set image.repository=${{ env.IMAGE_NAME }} \
+            --set "image.tag=${TAG}" \
+            --set-string "seed.admin.password=${PW}" \
+            --set persistence.size=1Gi \
+            --atomic \
+            --wait --timeout 25m
+
+      - name: Smoke test (/healthz)
+        run: |
+          set -euxo pipefail
+          NS="${{ steps.target.outputs.namespace }}"
+          kubectl rollout status deploy/foyre -n "$NS" --timeout=300s
+          kubectl exec -n "$NS" deploy/foyre -- \
+            python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/healthz'); assert r.status == 204"
 
   # Real Helm install against a cluster reachable from your self-hosted runner.
   # Teardown always runs so the namespace does not leak.

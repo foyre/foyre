@@ -161,9 +161,9 @@ Repository maintainers must configure **Actions secrets**
 `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` for publishes to succeed. Use a
 Docker Hub access token, not your account password.
 
-#### Optional: Helm install on a private runner
+#### Optional: ephemeral Helm smoke (`FOYRE_K8S_INTEGRATION`)
 
-After a successful image push, you can run a **real Helm install** on a cluster
+After a successful image push, you can run a **throwaway** Helm install on a cluster
 your self-hosted runner can reach (same `kubectl` context the runner uses).
 
 1. Add a **repository variable** `FOYRE_K8S_INTEGRATION` with value `true`.
@@ -183,6 +183,40 @@ deletes the namespace when the job finishes (success or failure).
 
 If `FOYRE_K8S_INTEGRATION` is unset or not `true`, this job is skipped so
 public forks and environments without a runner do not queue forever.
+
+#### Optional: continuous Helm deploy per branch (`FOYRE_AUTO_DEPLOY`)
+
+To **keep** a Helm release running for integration testing after each push:
+
+1. Set repository variable **`FOYRE_AUTO_DEPLOY`** to **`true`**.
+2. Use the same self-hosted runner setup as above (`FOYRE_RUNNER_LABELS` if you
+   do not use the default `["self-hosted","foyre-k8s"]` labels).
+3. Place a valid **kubeconfig** on the runner. The default path is
+   **`/home/ubuntu/rke2.yaml`**. Override with repository variable
+   **`FOYRE_KUBECONFIG_PATH`** if needed.
+4. (Recommended) Set Actions secret **`FOYRE_DEPLOY_SEED_PASSWORD`** to a strong
+   password for the seeded admin. If unset, a documented placeholder is used
+   (`ChangeMeAfterFirstLogin9Zx` in the workflow); change it after first login.
+
+**Namespace rules** (see `scripts/ci/k8s-deploy-namespace.sh` — must stay in sync
+with cleanup):
+
+| Git ref | Namespace |
+|---------|-----------|
+| `main` branch or any **`v*`** git tag push | `foyre` |
+| Any other branch | `foyre-<sanitized-branch>` (slashes → hyphens, lowercased, max 63 chars) |
+
+The Helm release name is always **`foyre`** inside that namespace.
+
+**Cleanup when a feature PR merges into `main`:** workflow
+**`.github/workflows/cleanup-feature-namespace.yml`** runs on `pull_request`
+`closed` when the PR was **merged**, **base** is **`main`**, and the head branch
+is not `main`. It resolves the same `foyre-<branch>` namespace and runs
+`helm uninstall` plus `kubectl delete namespace`. It **never** deletes the
+`foyre` namespace from that workflow (defense in depth).
+
+If you merge without a PR (push merge locally), no cleanup workflow runs; delete
+the branch namespace manually if needed.
 
 ## Pull requests
 

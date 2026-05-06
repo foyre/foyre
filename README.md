@@ -325,13 +325,24 @@ Point Helm at it with `--set image.repository=...` and `--set image.tag=...`,
 or load the image into **kind** / **minikube** and set `imagePullPolicy` to
 `Never` / `IfNotPresent` as appropriate.
 
-### CI-built images
+### CI-built images and cluster deploy
 
 When [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre) credentials are
 configured in GitHub Actions, pushes publish tags such as **`main`**,
 **`latest`** (on `main` only), **`sha-<short>`**, and semver tags for **`v*`
-git tags**. Optional: a **Helm smoke install** on a private runner when
-`FOYRE_K8S_INTEGRATION` is enabled ([CONTRIBUTING.md](./CONTRIBUTING.md)).
+git tags**.
+
+Optional automation on a **self-hosted** runner (see
+[CONTRIBUTING.md](./CONTRIBUTING.md)):
+
+- **`FOYRE_K8S_INTEGRATION`** — ephemeral Helm install in `foyre-ci-<run_id>`,
+  then tear down after smoke checks.
+- **`FOYRE_AUTO_DEPLOY`** — after each push, **`helm upgrade --install`** into
+  **`foyre`** for `main` / version tags, or into **`foyre-<branch>`** for
+  feature branches (kubeconfig default **`/home/ubuntu/rke2.yaml`**). When a
+  PR into **`main`** is **merged**, **`.github/workflows/cleanup-feature-namespace.yml`**
+  removes the feature branch namespace.
+
 **pytest** runs on every push and pull request.
 
 ### Environment variables (reference)
