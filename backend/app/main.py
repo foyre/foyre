@@ -63,6 +63,12 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router, prefix="/api")
 
+    # Must be registered before the SPA catch-all `/{full_path:path}` or `/healthz`
+    # is swallowed and returns 200 HTML (kube probes still "pass" on 2xx).
+    @app.get("/healthz", include_in_schema=False)
+    def _healthz() -> Response:
+        return Response(status_code=204)
+
     # If a built frontend has been placed at $STATIC_DIR (set by the production
     # Docker image / Helm chart), serve it from the same origin so a single
     # ingress/host can front the app.
@@ -74,10 +80,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-
-
-# Lightweight liveness probe for k8s / load balancers — distinct from the
-# OpenAPI surface so it never gets accidentally caught up in route changes.
-@app.get("/healthz", include_in_schema=False)
-def _healthz() -> Response:
-    return Response(status_code=204)

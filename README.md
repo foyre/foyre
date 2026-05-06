@@ -225,12 +225,10 @@ backend/app/
 
 ## Deployment
 
-Foyre ships as one container image plus a Helm chart under
-[`deploy/helm/foyre`](./deploy/helm/foyre). **Source code** lives at
-[github.com/foyre/foyre](https://github.com/foyre/foyre); the chart defaults to pulling the
-**[Docker Hub `zfeldstein/foyre`](https://hub.docker.com/r/zfeldstein/foyre)** image.
-If `image.tag` is left empty, the chart uses the chart’s `appVersion` as the
-tag (for example `zfeldstein/foyre:0.1.0`).
+Foyre ships as one container image plus a Helm chart. **Source code** lives at
+[github.com/foyre/foyre](https://github.com/foyre/foyre); the chart defaults to
+pulling the **[Docker Hub `zfeldstein/foyre`](https://hub.docker.com/r/zfeldstein/foyre)**
+image.
 
 ### Prerequisites (Helm)
 
@@ -240,10 +238,31 @@ tag (for example `zfeldstein/foyre:0.1.0`).
 - A **default StorageClass** (the chart requests a PVC for SQLite unless you
   switch to Postgres). See [DEPLOY.md](./DEPLOY.md) if your cluster has none.
 
-### Helm install
+### Helm Install
 
-Run these from a clone of this repository so the path `deploy/helm/foyre`
-exists:
+If you are installing from the published Helm repo:
+
+```bash
+helm repo add foyre https://foyre.github.io/foyre/
+helm repo update
+
+helm upgrade --install foyre foyre/foyre \
+  --namespace foyre --create-namespace \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+For a specific chart version:
+
+```bash
+helm upgrade --install foyre foyre/foyre \
+  --version 0.1.0 \
+  --namespace foyre --create-namespace \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+You can also install directly from a local clone:
 
 ```bash
 git clone https://github.com/foyre/foyre.git
@@ -258,7 +277,7 @@ helm upgrade --install foyre deploy/helm/foyre \
 That command:
 
 - Creates namespace `foyre` (if needed) and release **`foyre`**.
-- Deploys the app **Deployment**, **Service** (`ClusterIP`, name **`foyre`**
+- Deploys the app **Deployment**, **Service** (`NodePort`, name **`foyre`**
   when the release name is `foyre`), optional **Ingress** (off by default),
   and a **PVC** for SQLite at `/data`.
 - Runs a **post-install seed Job** that creates the initial admin if missing.
@@ -268,10 +287,10 @@ That command:
 can also override the admin username and email; see
 [`deploy/helm/foyre/values.yaml`](./deploy/helm/foyre/values.yaml) under `seed`.
 
-**Pin the image tag** (recommended once you know which build you want):
+**Pin the image tag** if you want a specific application image:
 
 ```bash
-helm upgrade --install foyre deploy/helm/foyre \
+helm upgrade --install foyre foyre/foyre \
   --namespace foyre --create-namespace \
   --set image.tag=0.1.0 \
   --set seed.admin.password='change-me-on-first-login' \
@@ -285,7 +304,7 @@ published by CI (see [CONTRIBUTING.md](./CONTRIBUTING.md)).
 Docker Hub:
 
 ```bash
-helm upgrade --install foyre deploy/helm/foyre \
+helm upgrade --install foyre foyre/foyre \
   --namespace foyre --create-namespace \
   --set image.repository=my.registry.example/foyre \
   --set image.tag=1.2.3 \
@@ -296,9 +315,30 @@ helm upgrade --install foyre deploy/helm/foyre \
 Add `--set imagePullSecrets[0].name=...` if the cluster needs credentials to
 pull the image.
 
-### Open the UI after install
+### Open The Web UI
 
-The Service is `ClusterIP`. From your machine:
+The chart defaults to a **NodePort** service, which is convenient for a lab or
+single-node cluster:
+
+```bash
+kubectl --namespace foyre get svc foyre
+```
+
+Look for the `PORT(S)` value, for example `80:31234/TCP`. Open:
+
+```text
+http://<node-ip>:31234/
+```
+
+If you do not know the node IP:
+
+```bash
+kubectl get nodes -o wide
+```
+
+Use the `INTERNAL-IP` or `EXTERNAL-IP` that is reachable from your browser.
+
+For local/private access without exposing a NodePort, use port-forwarding:
 
 ```bash
 kubectl --namespace foyre port-forward svc/foyre 8080:80
@@ -307,6 +347,26 @@ kubectl --namespace foyre port-forward svc/foyre 8080:80
 Then open <http://localhost:8080> and sign in as **`admin`** with the password
 you passed in `seed.admin.password`. Change it immediately under your account
 menu.
+
+For a production-style install, use Ingress and set the service back to
+`ClusterIP`:
+
+```bash
+helm upgrade --install foyre foyre/foyre \
+  --namespace foyre --create-namespace \
+  --set service.type=ClusterIP \
+  --set ingress.enabled=true \
+  --set ingress.className=nginx \
+  --set ingress.hosts[0].host=foyre.example.com \
+  --set ingress.hosts[0].paths[0].path=/ \
+  --set ingress.hosts[0].paths[0].pathType=Prefix \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+Then point DNS for `foyre.example.com` at your Ingress controller. For TLS,
+add `ingress.tls` and cert-manager annotations in a values file rather than a
+long `--set` command.
 
 ### Beyond the defaults
 
