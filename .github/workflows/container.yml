@@ -174,11 +174,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve deploy parameters
+        id: target
+        run: |
+          set -euo pipefail
+          NS="$(bash scripts/ci/k8s-deploy-namespace.sh "${{ github.ref_name }}" "${{ github.ref_type }}")"
+          IMAGE="${{ env.IMAGE_NAME }}"
+          TAG="${{ needs.publish.outputs.image_tag }}"
+          KCFG="${FOYRE_KUBECONFIG_PATH:-/home/ubuntu/rke2.yaml}"
+
+          {
+            echo "namespace=$NS"
+            echo "image=$IMAGE"
+            echo "tag=$TAG"
+            echo "image_full=${IMAGE}:${TAG}"
+            echo "kubeconfig=$KCFG"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "::group::Deploy parameters"
+          echo "Image:      ${IMAGE}:${TAG}"
+          echo "Release:    foyre"
+          echo "Namespace:  ${NS}"
+          echo "Kubeconfig: ${KCFG}"
+          echo "Git SHA:    ${{ github.sha }}"
+          echo "Ref:        ${{ github.ref }}"
+          echo "::endgroup::"
+
       - name: Configure kubeconfig
         run: |
           set -euo pipefail
-          KCFG="${FOYRE_KUBECONFIG_PATH:-/home/ubuntu/rke2.yaml}"
-          echo "Using KUBECONFIG=$KCFG"
+          KCFG="${{ steps.target.outputs.kubeconfig }}"
           test -f "$KCFG" || { echo "::error::Kubeconfig not found at $KCFG"; exit 1; }
           echo "KUBECONFIG=$KCFG" >> "$GITHUB_ENV"
 
@@ -193,50 +218,79 @@ jobs:
         with:
           version: v1.30.0
 
-      - name: Target namespace
-        id: target
-        run: |
-          set -euo pipefail
-          NS="$(bash scripts/ci/k8s-deploy-namespace.sh "${{ github.ref_name }}" "${{ github.ref_type }}")"
-          echo "namespace=$NS" >> "$GITHUB_OUTPUT"
-          echo "Helm release foyre → namespace $NS | image ${{ env.IMAGE_NAME }}:${{ needs.publish.outputs.image_tag }}"
-
-      - name: Helm upgrade --install (image + NodePort service)
+      - name: Helm upgrade --install (pin SHA, NodePort)
         env:
           DEPLOY_SEED: ${{ secrets.FOYRE_DEPLOY_SEED_PASSWORD }}
         run: |
           set -euxo pipefail
           NS="${{ steps.target.outputs.namespace }}"
-          TAG="${{ needs.publish.outputs.image_tag }}"
+          IMAGE="${{ steps.target.outputs.image }}"
+          TAG="${{ steps.target.outputs.tag }}"
           PW="${DEPLOY_SEED:-ChangeMeAfterFirstLogin9Zx}"
+
+          echo "Deploying ${IMAGE}:${TAG} to namespace ${NS}"
+
           helm upgrade --install foyre deploy/helm/foyre \
             --namespace "$NS" \
             --create-namespace \
-            --set image.repository=${{ env.IMAGE_NAME }} \
+            --set image.repository="$IMAGE" \
             --set "image.tag=${TAG}" \
             --set service.type=NodePort \
             --set-string "seed.admin.password=${PW}" \
             --atomic \
             --wait --timeout 25m
 
-      - name: Rollout + in-cluster /healthz
+      - name: Verify rollout + image matches SHA tag
         run: |
           set -euxo pipefail
           NS="${{ steps.target.outputs.namespace }}"
+          EXPECTED="${{ steps.target.outputs.image_full }}"
+
           kubectl rollout status deploy/foyre -n "$NS" --timeout=300s
+
+          ACTUAL="$(kubectl -n "$NS" get deploy foyre -o jsonpath='{.spec.template.spec.containers[?(@.name=="foyre")].image}')"
+          echo "Expected image: ${EXPECTED}"
+          echo "Running image:  ${ACTUAL}"
+          if [ "${ACTUAL}" != "${EXPECTED}" ]; then
+            echo "::error::Deployed image ${ACTUAL} does not match expected ${EXPECTED}. Helm --atomic likely rolled back."
+            exit 1
+          fi
+
+          # Confirm the new code is actually serving traffic.
           kubectl exec -n "$NS" deploy/foyre -- \
             python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/healthz'); assert r.status == 204"
 
       - name: Show NodePort (manual validation)
+        id: nodeport
         run: |
           set -euxo pipefail
           NS="${{ steps.target.outputs.namespace }}"
-          echo "=== Service (NodePort) ==="
           kubectl get svc foyre -n "$NS" -o wide
           NP="$(kubectl get svc foyre -n "$NS" -o jsonpath='{.spec.ports[?(@.name=="http")].nodePort}')"
-          echo ""
+          NODE_IP="$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')"
+          {
+            echo "node_port=$NP"
+            echo "node_ip=$NODE_IP"
+          } >> "$GITHUB_OUTPUT"
           echo "NodePort: $NP"
-          echo "On a node IP, open: http://<NODE_IP>:$NP/"
+          echo "Open: http://${NODE_IP}:${NP}/"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Deployment summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Image | \`${{ steps.target.outputs.image_full }}\` |"
+            echo "| Git SHA | \`${{ github.sha }}\` |"
+            echo "| Namespace | \`${{ steps.target.outputs.namespace }}\` |"
+            echo "| Release | \`foyre\` |"
+            if [ -n "${{ steps.nodeport.outputs.node_port }}" ]; then
+              echo "| URL | http://${{ steps.nodeport.outputs.node_ip }}:${{ steps.nodeport.outputs.node_port }}/ |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   helm-e2e:
     name: Helm smoke (ephemeral namespace)
