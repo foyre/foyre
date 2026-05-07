@@ -46,6 +46,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     name: Validate (tests + chart)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -84,7 +85,9 @@ jobs:
           version: v3.14.4
 
       - name: Fetch chart dependencies
-        run: helm dependency build deploy/helm/foyre
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
+          helm dependency build deploy/helm/foyre
 
       - name: Helm lint + template
         run: |
@@ -95,6 +98,7 @@ jobs:
   build-verify:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -120,6 +124,7 @@ jobs:
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       needs.validate.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       image_tag: ${{ steps.sha_tag.outputs.tag }}
     steps:
@@ -172,6 +177,11 @@ jobs:
       needs.publish.result == 'success' &&
       vars.FOYRE_AUTO_DEPLOY != 'false'
     runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted"]') }}
+    timeout-minutes: 40
+    # Queue deploys for the same ref instead of cancelling mid-rollout.
+    concurrency:
+      group: deploy-k8s-${{ github.ref }}
+      cancel-in-progress: false
     env:
       FOYRE_KUBECONFIG_PATH: ${{ vars.FOYRE_KUBECONFIG_PATH }}
     steps:
@@ -222,7 +232,9 @@ jobs:
           version: v1.30.0
 
       - name: Fetch chart dependencies
-        run: helm dependency build deploy/helm/foyre
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
+          helm dependency build deploy/helm/foyre
 
       - name: Helm upgrade --install (pin SHA, NodePort)
         env:
@@ -306,6 +318,7 @@ jobs:
       needs.publish.result == 'success' &&
       vars.FOYRE_K8S_INTEGRATION == 'true'
     runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted"]') }}
+    timeout-minutes: 40
     env:
       CI_NAMESPACE: foyre-ci-${{ github.run_id }}
       CI_RELEASE: foyre-ci-${{ github.run_id }}
@@ -332,7 +345,9 @@ jobs:
           version: v1.30.0
 
       - name: Fetch chart dependencies
-        run: helm dependency build deploy/helm/foyre
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
+          helm dependency build deploy/helm/foyre
 
       - name: Helm install (atomic rollback on failure)
         id: install

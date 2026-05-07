@@ -21,6 +21,7 @@ jobs:
       github.head_ref != 'main' &&
       vars.FOYRE_AUTO_DEPLOY != 'false'
     runs-on: ${{ fromJSON(vars.FOYRE_RUNNER_LABELS != '' && vars.FOYRE_RUNNER_LABELS || '["self-hosted"]') }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
