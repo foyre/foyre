@@ -83,6 +83,9 @@ jobs:
         with:
           version: v3.14.4
 
+      - name: Fetch chart dependencies
+        run: helm dependency build deploy/helm/foyre
+
       - name: Helm lint + template
         run: |
           helm lint deploy/helm/foyre
@@ -218,6 +221,9 @@ jobs:
         with:
           version: v1.30.0
 
+      - name: Fetch chart dependencies
+        run: helm dependency build deploy/helm/foyre
+
       - name: Helm upgrade --install (pin SHA, NodePort)
         env:
           DEPLOY_SEED: ${{ secrets.FOYRE_DEPLOY_SEED_PASSWORD }}
@@ -324,6 +330,9 @@ jobs:
       - uses: azure/setup-kubectl@v4
         with:
           version: v1.30.0
+
+      - name: Fetch chart dependencies
+        run: helm dependency build deploy/helm/foyre
 
       - name: Helm install (atomic rollback on failure)
         id: install

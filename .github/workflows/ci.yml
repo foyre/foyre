@@ -64,6 +64,9 @@ jobs:
         with:
           version: v3.14.4
 
+      - name: Fetch chart dependencies
+        run: helm dependency build deploy/helm/foyre
+
       - name: Lint
         run: helm lint deploy/helm/foyre
 
