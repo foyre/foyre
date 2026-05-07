@@ -278,11 +278,15 @@ helm upgrade --install foyre foyre/foyre \
   --wait
 ```
 
-You can also install directly from a local clone:
+You can also install directly from a local clone. The chart has an optional
+PostgreSQL subchart, so run `helm dependency update` once before installing
+(or whenever `Chart.yaml` changes):
 
 ```bash
 git clone https://github.com/foyre/foyre.git
 cd foyre
+
+helm dependency update deploy/helm/foyre
 
 helm upgrade --install foyre deploy/helm/foyre \
   --namespace foyre --create-namespace \
@@ -384,11 +388,217 @@ Then point DNS for `foyre.example.com` at your Ingress controller. For TLS,
 add `ingress.tls` and cert-manager annotations in a values file rather than a
 long `--set` command.
 
+### Database backends
+
+Foyre supports four database configurations. The chart picks one based on
+**what you set in values**, not a `type` flag. The selection order, first
+match wins, is:
+
+| Priority | If this is set in values | Foyre uses |
+|---:|---|---|
+| 1 | `database.existingSecret` | the DATABASE_URL stored in that Secret (BYO) |
+| 2 | `database.url` | that URL exactly, as-is |
+| 3 | `postgresql.enabled: true` | **Embedded Postgres** (Bitnami subchart) |
+| 4 | `database.postgres.host` | **External Postgres** at that host |
+| 5 | (nothing) | **SQLite** at `/data/foyre.db` on a chart-managed PVC |
+
+When any Postgres mode wins, the chart automatically **skips the SQLite PVC**
+and the `/data` mount.
+
+The Foyre release name in every example below is `foyre`. Change `--namespace`
+or release name as you wish; the Postgres StatefulSet in the embedded mode is
+named `<release>-postgresql`.
+
+#### Mode 1: SQLite (default)
+
+Single replica, single SQLite file on a PVC. Ideal for evaluation, demos,
+small teams, and the [k3s quickstart](#option-2-fresh-ubuntu-vm--lab-install).
+
+```bash
+helm upgrade --install foyre foyre/foyre \
+  --namespace foyre --create-namespace \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+What you get:
+- A 5 GiB PVC named `<release>-data` (`helm.sh/resource-policy: keep`).
+- `DATABASE_URL=sqlite:////data/foyre.db` injected from a chart-managed Secret.
+
+Customize the SQLite location or PVC size in `values.yaml`:
+
+```yaml
+persistence:
+  size: 20Gi
+database:
+  sqlite:
+    path: /data/foyre.db   # mounted at persistence.mountPath
+```
+
+Constraints:
+- **Single replica only.** Two pods opening the same SQLite file corrupts it.
+  The chart sets `replicaCount: 1` and `strategy.type: Recreate`.
+- Backups = snapshot the PVC, or stop the pod and copy `foyre.db`.
+
+#### Mode 2: Embedded Postgres (bundled with Foyre)
+
+The chart deploys a real Postgres for you using the
+[upstream Bitnami chart](https://artifacthub.io/packages/helm/bitnami/postgresql)
+as a subchart, and wires Foyre to it. Good for lab installs and
+self-contained deployments where you do not want to run Postgres yourself.
+
+```bash
+helm upgrade --install foyre foyre/foyre \
+  --namespace foyre --create-namespace \
+  --set postgresql.enabled=true \
+  --set postgresql.auth.password='strong-postgres-password' \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+What you get:
+- A `StatefulSet` named **`foyre-postgresql`** with its own PVC.
+- A `Service` named **`foyre-postgresql`** at port `5432`.
+- `DATABASE_URL=postgresql+psycopg://foyre:<password>@foyre-postgresql:5432/foyre`
+  injected into Foyre.
+
+Defaults the chart sets for the Bitnami subchart:
+
+```yaml
+postgresql:
+  enabled: true
+  auth:
+    username: foyre        # the application user (not "postgres")
+    database: foyre
+    password: ""           # required; set --set postgresql.auth.password=...
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+```
+
+Override **any** Bitnami value under the `postgresql.*` key — image,
+resources, persistence, init scripts, etc. See the chart's
+[full values reference](https://artifacthub.io/packages/helm/bitnami/postgresql).
+
+Examples:
+
+```yaml
+postgresql:
+  enabled: true
+  auth:
+    username: foyre
+    database: foyre
+    password: strong-postgres-password
+  primary:
+    persistence:
+      size: 20Gi
+      storageClass: fast-ssd
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+```
+
+Notes:
+- The Postgres pod takes ~30–90 seconds to be ready on first install. The
+  Foyre pod will crash-restart once or twice waiting for it; use
+  `--wait --timeout 10m` so Helm reports success after both come up.
+- The Bitnami chart auto-generates a `postgres` admin password and stores it
+  in `Secret/<release>-postgresql`. Foyre does not use that account; it
+  connects as `foyre` (or whatever you set in `postgresql.auth.username`).
+
+#### Mode 3: External Postgres (inline credentials)
+
+Point Foyre at a Postgres you already run — managed (RDS, Cloud SQL, Aiven,
+Neon, Supabase) or self-hosted. The trigger is **`database.postgres.host`**.
+
+```bash
+helm upgrade --install foyre foyre/foyre \
+  --namespace foyre --create-namespace \
+  --set database.postgres.host=db.internal \
+  --set database.postgres.port=5432 \
+  --set database.postgres.database=foyre \
+  --set database.postgres.user=foyre \
+  --set database.postgres.password='change-me' \
+  --set database.postgres.sslmode=require \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+What happens:
+- The chart writes `Secret/<release>-db` containing `DATABASE_URL=...`.
+- Foyre reads it and connects to your Postgres.
+- No SQLite PVC, no embedded Postgres pod.
+
+The `sslmode` field is optional but recommended for managed Postgres
+(`require`, `verify-ca`, or `verify-full`).
+
+This mode keeps the password in Helm values — fine for self-hosted clusters
+where the values file is treated as sensitive. For stricter setups, see Mode 4.
+
+#### Mode 4: External Postgres with bring-your-own Secret (production)
+
+The chart never sees your Postgres credentials. Recommended for managed
+Postgres, Vault, Sealed Secrets, External Secrets Operator, etc.
+
+```bash
+# 1. Create a Secret containing the full DATABASE_URL.
+kubectl -n foyre create secret generic foyre-db \
+  --from-literal=DATABASE_URL='postgresql+psycopg://foyre:...@db.internal:5432/foyre?sslmode=require'
+
+# 2. Tell Helm to read it.
+helm upgrade --install foyre foyre/foyre \
+  --namespace foyre --create-namespace \
+  --set database.existingSecret=foyre-db \
+  --set seed.admin.password='change-me-on-first-login' \
+  --wait
+```
+
+The Secret key defaults to `DATABASE_URL`; override with
+`database.existingSecretKey` if your tool emits a different key.
+
+#### Verifying the active backend
+
+After install:
+
+```bash
+# Helm's NOTES.txt prints the resolved backend
+helm -n foyre get notes foyre
+
+# Or read the URL the app is actually using (chart-managed mode)
+kubectl -n foyre get secret foyre-db -o jsonpath='{.data.DATABASE_URL}' | base64 -d ; echo
+
+# Embedded mode: confirm the Postgres pod is up
+kubectl -n foyre get pods -l app.kubernetes.io/name=postgresql
+kubectl -n foyre exec sts/foyre-postgresql -- pg_isready -U foyre
+```
+
+#### Switching modes after install
+
+Foyre **does not migrate data** between backends automatically. Switching
+backends starts with a fresh database, which means re-seeding the admin and
+losing existing requests / comments / history. To preserve data, dump from
+the old backend and restore into the new one before switching:
+
+```bash
+# Example: SQLite -> Postgres
+kubectl -n foyre exec deploy/foyre -- sqlite3 /data/foyre.db .dump > foyre.sql
+# Restore into your Postgres (manual table mapping may be required).
+```
+
+If you only need to swap embedded → external Postgres or rotate
+credentials, the simpler path is `helm upgrade` with the new values; the
+seed Job is idempotent and your existing rows are preserved on the same
+Postgres.
+
+For Ingress + TLS, multiple replicas, secret rotation, upgrades, and
+backups, see [DEPLOY.md](./DEPLOY.md).
+
 ### Beyond the defaults
 
-For **Postgres**, **Ingress / TLS**, supplying your own **Fernet / JWT**
-secrets, multiple replicas, upgrades, and backups, use
-[**DEPLOY.md**](./DEPLOY.md).
+For **Ingress / TLS**, **secret rotation**, **multiple replicas**, **upgrades**,
+and **backups**, use [**DEPLOY.md**](./DEPLOY.md).
 
 ### Build the image locally
 

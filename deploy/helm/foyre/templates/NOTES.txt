@@ -4,7 +4,7 @@ Release name:    {{ .Release.Name }}
 Namespace:       {{ .Release.Namespace }}
 Replicas:        {{ .Values.replicaCount }}
 Image:           {{ include "foyre.image" . }}
-Database:        {{ if .Values.database.existingSecret }}via Secret/{{ .Values.database.existingSecret }}{{ else }}{{ .Values.database.url }}{{ end }}
+Database:        {{ if .Values.database.existingSecret }}via Secret/{{ .Values.database.existingSecret }}{{ else if .Values.database.url }}{{ .Values.database.url }}{{ else if and .Values.postgresql .Values.postgresql.enabled }}bundled postgres @ {{ .Release.Name }}-postgresql:5432/{{ .Values.postgresql.auth.database | default "foyre" }}{{ else if .Values.database.postgres.host }}external postgres @ {{ .Values.database.postgres.host }}:{{ .Values.database.postgres.port | default 5432 }}/{{ .Values.database.postgres.database | default "foyre" }}{{ else }}sqlite ({{ .Values.database.sqlite.path | default "/data/foyre.db" }}){{ end }}
 
 {{- if .Values.ingress.enabled }}
 

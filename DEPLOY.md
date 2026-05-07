@@ -45,9 +45,14 @@ The Helm chart is at [`deploy/helm/foyre`](./deploy/helm/foyre).
 
 ## Install — quickest path
 
+The chart has an optional PostgreSQL subchart, so when installing from a local
+clone, run `helm dependency update` once before the first install:
+
 ```bash
 git clone https://github.com/foyre/foyre.git
 cd foyre
+
+helm dependency update deploy/helm/foyre
 
 helm upgrade --install foyre deploy/helm/foyre \
   --namespace foyre --create-namespace \
@@ -59,7 +64,7 @@ This installs Foyre with:
 
 - 1 replica
 - A 5 GiB PVC (default StorageClass) for SQLite at `/data`
-- A `ClusterIP` Service named `foyre`
+- A `NodePort` Service named `foyre`
 - An auto-generated `APP_SECRET_KEY` and `JWT_SECRET` stored in a
   Secret with `helm.sh/resource-policy=keep`
 - A seed admin (`admin` / your password)
@@ -95,10 +100,38 @@ image:
 replicaCount: 1   # See note below before changing this.
 
 # --- Database --------------------------------------------------------
-# Provision Postgres separately (managed RDS / Cloud SQL / Bitnami chart
-# / etc.) and put the connection string in a Secret like:
+# Three supported modes (chart picks based on what you set, no `type` flag):
+#
+# A) Bundled Postgres via Bitnami subchart (good for evaluation / lab):
+#
+#   postgresql:
+#     enabled: true
+#     auth:
+#       username: foyre
+#       database: foyre
+#       password: strong-postgres-password
+#     primary:
+#       persistence:
+#         size: 20Gi
+#
+# B) External Postgres, inline config (chart writes a Secret containing
+#    DATABASE_URL — fine for self-hosted Postgres where the password is not
+#    externally managed). Trigger: set database.postgres.host.
+#
+#   database:
+#     postgres:
+#       host: db.internal
+#       port: 5432
+#       database: foyre
+#       user: foyre
+#       password: super-secret
+#       sslmode: require
+#
+# C) Bring-your-own Secret (recommended for managed Postgres / Vault /
+#    Sealed Secrets — chart never sees credentials):
+#
 #   kubectl -n foyre create secret generic foyre-db \
-#     --from-literal=DATABASE_URL='postgresql+psycopg://foyre:...@db.internal:5432/foyre'
+#     --from-literal=DATABASE_URL='postgresql+psycopg://foyre:...@db.internal:5432/foyre?sslmode=require'
 database:
   existingSecret: foyre-db
   existingSecretKey: DATABASE_URL
@@ -112,8 +145,9 @@ secrets:
   existingSecret: foyre-app
 
 # --- Persistence -----------------------------------------------------
-# Not strictly required when using Postgres, but harmless. Set
-# enabled: false to skip the PVC entirely.
+# When postgresql.enabled=true, database.postgres.host is set, or
+# database.existingSecret is set, the chart automatically skips the PVC.
+# You can still set enabled: false explicitly for clarity.
 persistence:
   enabled: false
 

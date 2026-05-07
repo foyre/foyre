@@ -50,3 +50,8 @@ kubeconfig
 kubeconfig.yaml
 *.kubeconfig
 rke2.yaml
+
+# Helm dependency tarballs (run `helm dependency update` to fetch).
+# Chart.lock is committed; the tarballs are not.
+deploy/helm/*/charts/
+.helm-dist/

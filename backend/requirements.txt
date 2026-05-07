@@ -10,3 +10,4 @@ kubernetes>=31.0,<35
 PyYAML>=6.0,<7.0
 python-jose[cryptography]>=3.3,<4.0
 python-multipart>=0.0.9,<1.0
+psycopg[binary]>=3.1,<4.0

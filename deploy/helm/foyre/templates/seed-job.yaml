@@ -68,13 +68,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "foyre.seedSecretName" . }}
                   key: SEED_ADMIN_EMAIL
-          {{- if .Values.persistence.enabled }}
+          {{- if eq (include "foyre.usePersistence" .) "true" }}
           volumeMounts:
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}
           {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
-      {{- if .Values.persistence.enabled }}
+      {{- if eq (include "foyre.usePersistence" .) "true" }}
       volumes:
         - name: data
           persistentVolumeClaim:

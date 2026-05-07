@@ -8,10 +8,20 @@ description: |
 type: application
 
 # Bumped together with chart template changes.
-version: 0.1.0
+version: 0.2.0
 
 # The Foyre application version this chart packages by default.
 appVersion: "0.1.0"
+
+# Optional bundled PostgreSQL via Bitnami's chart. Disabled by default; turn
+# on with postgresql.enabled=true. For production with managed Postgres
+# (RDS / Cloud SQL / Aiven / etc.) leave this off and set
+# database.postgres.host or database.existingSecret instead.
+dependencies:
+  - name: postgresql
+    version: ">=18.0.0 <19.0.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
 
 home: https://github.com/foyre/foyre
 sources:

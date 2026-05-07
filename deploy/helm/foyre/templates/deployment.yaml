@@ -72,7 +72,7 @@ spec:
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- if .Values.persistence.enabled }}
+          {{- if eq (include "foyre.usePersistence" .) "true" }}
           volumeMounts:
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}
@@ -80,7 +80,7 @@ spec:
           livenessProbe: {{- toYaml .Values.probes.liveness | nindent 12 }}
           readinessProbe: {{- toYaml .Values.probes.readiness | nindent 12 }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
-      {{- if .Values.persistence.enabled }}
+      {{- if eq (include "foyre.usePersistence" .) "true" }}
       volumes:
         - name: data
           persistentVolumeClaim:

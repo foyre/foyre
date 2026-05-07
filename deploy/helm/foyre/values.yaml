@@ -55,8 +55,11 @@ ingress:
     #     - foyre.example.com
 
 ## --------------------------------------------------------------------------
-## Persistence (only used when database.url is the default SQLite URL)
+## Persistence (only used when SQLite is the backend)
 ## --------------------------------------------------------------------------
+# When postgresql.enabled=true, database.postgres.host is set, or
+# database.existingSecret is set, the chart automatically skips the PVC and
+# the /data volume mount.
 persistence:
   enabled: true
   # If your cluster has a default StorageClass, leave this blank.
@@ -71,15 +74,84 @@ persistence:
 ## --------------------------------------------------------------------------
 ## Database
 ## --------------------------------------------------------------------------
+# Foyre supports three backends. Pick ONE; the chart picks the backend based
+# on what you set, not on a `type` flag:
+#
+#   1. SQLite (default, single-replica). Do nothing — leave everything below
+#      empty. The chart provisions a PVC at /data and stores foyre.db there.
+#
+#   2. Bundled Postgres. Set `postgresql.enabled=true` (block at the bottom
+#      of this file). The chart deploys Bitnami Postgres alongside Foyre and
+#      wires Foyre to use it. No `database.*` values needed.
+#
+#   3. External Postgres. Either:
+#        a. set `database.postgres.host` (and the rest of database.postgres.*),
+#           OR
+#        b. set `database.existingSecret` to a Secret containing key
+#           DATABASE_URL (recommended for managed Postgres / Vault / Sealed
+#           Secrets — chart never sees the credentials).
+#
+# Selection precedence (first match wins):
+#   database.existingSecret  >  database.url  >  postgresql.enabled  >
+#   database.postgres.host   >  SQLite (default)
 database:
-  # Default SQLite URL points at the persistent volume above. Override to
-  # point at a Postgres instance for production deployments:
-  #   url: "postgresql+psycopg://user:pass@postgres:5432/foyre"
-  url: "sqlite:////data/foyre.db"
-  # If `existingSecret` is set, the chart reads DATABASE_URL from that
-  # secret's key (default key: DATABASE_URL) instead of `database.url`.
+  # Advanced override. If set, used verbatim and the chart skips the blocks
+  # below. Examples:
+  #   sqlite:////data/foyre.db
+  #   postgresql+psycopg://foyre:pass@db.example:5432/foyre
+  url: ""
+
+  # SQLite settings (default backend).
+  sqlite:
+    # Path inside the container; lives on the PVC (mountPath above).
+    path: /data/foyre.db
+
+  # External Postgres (set host to enable). Foyre uses the SQLAlchemy
+  # `postgresql+psycopg://` driver under the hood.
+  postgres:
+    # Set this to a non-empty value to use external Postgres. When set, the
+    # chart will NOT deploy bundled Postgres — even if postgresql.enabled=true.
+    host: ""
+    port: 5432
+    database: foyre
+    user: foyre
+    # Inline password. Stored by the chart in a Secret it owns. For external
+    # secret managers, use database.existingSecret with a full DATABASE_URL.
+    password: ""
+    # Optional SSL mode, e.g. require | verify-ca | verify-full
+    sslmode: ""
+
+  # Bring-your-own Secret containing the full DATABASE_URL (recommended for
+  # production / managed Postgres). When set, the chart skips computing a URL
+  # and skips the SQLite PVC.
   existingSecret: ""
   existingSecretKey: DATABASE_URL
+
+## --------------------------------------------------------------------------
+## Bundled PostgreSQL (Bitnami subchart)
+## --------------------------------------------------------------------------
+# This is option 2 from the Database section above. Set enabled=true to
+# deploy Postgres alongside Foyre — that's the only switch you need; Foyre
+# auto-wires to it.
+#
+# Bypassed when `database.url`, `database.existingSecret`, or
+# `database.postgres.host` is set.
+#
+# Any Bitnami `postgresql` chart value may be overridden under this key —
+# see https://artifacthub.io/packages/helm/bitnami/postgresql.
+postgresql:
+  enabled: true
+  auth:
+    # User and database created by Postgres init. Foyre connects as this user;
+    # the chart does not use the `postgres` admin user.
+    username: foyre
+    database: foyre
+    # REQUIRED when enabled=true. Mirrored into Foyre's DATABASE_URL.
+    password: "admin"
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
 
 ## --------------------------------------------------------------------------
 ## Secrets
