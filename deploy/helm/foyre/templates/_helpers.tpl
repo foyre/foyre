@@ -109,6 +109,25 @@ Name of the PVC.
 {{- end -}}
 
 {{/*
+Validate values: catch common typos that would silently fall back to SQLite.
+Invoked from secret.yaml (always rendered).
+*/}}
+{{- define "foyre.validateValues" -}}
+{{- if hasKey (.Values.database | default dict) "postgresql" -}}
+{{- fail "values: 'database.postgresql.*' is not a valid path. Use 'postgresql.*' at the TOP level (sibling of 'database:'). See README -> Database backends." -}}
+{{- end -}}
+{{- if hasKey (.Values.database | default dict) "bundled" -}}
+{{- fail "values: 'database.bundled.*' is not a valid path. To deploy bundled Postgres, set 'postgresql.enabled=true' (sibling of 'database:'). See README -> Database backends." -}}
+{{- end -}}
+{{- if hasKey (.Values.database | default dict) "embedded" -}}
+{{- fail "values: 'database.embedded.*' is not a valid path. To deploy bundled Postgres, set 'postgresql.enabled=true' (sibling of 'database:'). See README -> Database backends." -}}
+{{- end -}}
+{{- if hasKey .Values "postgres" -}}
+{{- fail "values: 'postgres.*' is not a valid top-level key. Use 'postgresql.*' for the bundled Bitnami subchart, or 'database.postgres.*' to connect to an external Postgres. See README -> Database backends." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Whether the chart should mount /data and persist the SQLite database.
 True only when no other backend has been selected — i.e. SQLite is the
 chosen backend.

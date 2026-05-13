@@ -140,14 +140,14 @@ database:
 # Any Bitnami `postgresql` chart value may be overridden under this key —
 # see https://artifacthub.io/packages/helm/bitnami/postgresql.
 postgresql:
-  enabled: true
+  enabled: false
   auth:
     # User and database created by Postgres init. Foyre connects as this user;
     # the chart does not use the `postgres` admin user.
     username: foyre
     database: foyre
     # REQUIRED when enabled=true. Mirrored into Foyre's DATABASE_URL.
-    password: "admin"
+    password: ""
   primary:
     persistence:
       enabled: true
