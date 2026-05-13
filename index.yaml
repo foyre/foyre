@@ -5,6 +5,39 @@ entries:
       artifacthub.io/license: Apache-2.0
     apiVersion: v2
     appVersion: 0.1.0
+    created: "2026-05-13T16:14:28.484343661Z"
+    dependencies:
+    - condition: postgresql.enabled
+      name: postgresql
+      repository: https://charts.bitnami.com/bitnami
+      version: '>=18.0.0 <19.0.0'
+    description: 'Foyre — an internal front door for AI application requests. Structured
+      intake, deterministic risk classification, role-aware review, and per-request
+      isolated Kubernetes virtual clusters for hands-on validation. '
+    digest: d6d3c0c11d758b1fc6103717003603e21d7259f5e681042c3f2e0657f41b4f92
+    home: https://github.com/foyre/foyre
+    icon: https://raw.githubusercontent.com/foyre/foyre/main/foyre-logo.png
+    keywords:
+    - ai
+    - governance
+    - intake
+    - kubernetes
+    - vcluster
+    - review-workflow
+    maintainers:
+    - email: hello@foyre.ai
+      name: Zack Feldstein
+    name: foyre
+    sources:
+    - https://github.com/foyre/foyre
+    type: application
+    urls:
+    - https://foyre.github.io/foyre/foyre-0.2.2.tgz
+    version: 0.2.2
+  - annotations:
+      artifacthub.io/license: Apache-2.0
+    apiVersion: v2
+    appVersion: 0.1.0
     created: "2026-05-13T16:04:03.226955467Z"
     dependencies:
     - condition: postgresql.enabled
@@ -62,4 +95,4 @@ entries:
     urls:
     - https://foyre.github.io/foyre/foyre-0.1.0.tgz
     version: 0.1.0
-generated: "2026-05-13T16:04:03.21925608Z"
+generated: "2026-05-13T16:14:28.466532992Z"
