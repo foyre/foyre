@@ -5,10 +5,18 @@
 ## Image
 ## --------------------------------------------------------------------------
 # Default registry image (Docker Hub). Source repo: https://github.com/foyre/foyre
+# When `tag` is empty the chart falls back to .Chart.AppVersion (the app
+# version pinned to this chart release). Each chart release therefore
+# resolves to a unique, immutable image tag — Kubernetes will pull fresh
+# even with imagePullPolicy=IfNotPresent.
+#
+# Do NOT set `tag: latest` here as a default: nodes cache `latest` and
+# `imagePullPolicy: IfNotPresent` would never refresh, so app fixes wouldn't
+# propagate on `helm upgrade`. Override `image.tag` explicitly per-install
+# only when you intentionally want a moving target.
 image:
   repository: zfeldstein/foyre
-  # Defaults to .Chart.AppVersion if empty.
-  tag: "latest"
+  tag: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
