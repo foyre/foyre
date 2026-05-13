@@ -5,12 +5,33 @@ vcluster create/delete / service patching / secret reading.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import yaml
 from kubernetes import client as k8s_client
 from kubernetes import config as k8s_config
 from kubernetes.client.rest import ApiException
+
+logger = logging.getLogger(__name__)
+
+
+def _server_url_from_kubeconfig(conf_dict: dict, context_name: str | None) -> str | None:
+    """Best-effort lookup of the API server URL for the chosen context."""
+    try:
+        contexts = {c["name"]: c["context"] for c in conf_dict.get("contexts", [])}
+        ctx = (
+            contexts.get(context_name)
+            if context_name
+            else contexts.get(conf_dict.get("current-context"))
+        )
+        if not ctx:
+            return None
+        cluster_name = ctx.get("cluster")
+        clusters = {c["name"]: c["cluster"] for c in conf_dict.get("clusters", [])}
+        return clusters.get(cluster_name, {}).get("server")
+    except Exception:
+        return None
 
 
 @dataclass
@@ -75,11 +96,27 @@ def test_connection(
     """Validate we can reach the cluster and have the permissions we need.
 
     Doesn't mutate the cluster; uses `SelfSubjectAccessReview` to check RBAC.
+    Failures are logged at WARNING so operators can see *why* in pod logs —
+    the API endpoint itself still returns HTTP 200 with success=false.
     """
+    try:
+        conf_dict = yaml.safe_load(kubeconfig_yaml)
+        server_url = _server_url_from_kubeconfig(conf_dict or {}, context_name) if isinstance(conf_dict, dict) else None
+    except Exception:
+        server_url = None
+
     try:
         api = _api_client_from_kubeconfig(kubeconfig_yaml, context_name)
     except Exception as e:
-        return ConnectionTestResult(success=False, error=f"invalid kubeconfig: {e}")
+        msg = f"invalid kubeconfig: {e}"
+        logger.warning("host-cluster test_connection: %s", msg)
+        return ConnectionTestResult(success=False, error=msg)
+
+    logger.info(
+        "host-cluster test_connection: probing server=%s context=%s",
+        server_url or "<unknown>",
+        context_name or "<current-context>",
+    )
 
     try:
         version = k8s_client.VersionApi(api).get_code()
@@ -104,6 +141,12 @@ def test_connection(
             api_group="rbac.authorization.k8s.io",
         )
 
+        logger.info(
+            "host-cluster test_connection OK: server=%s version=%s nodes=%d",
+            server_url or "<unknown>",
+            cluster_version,
+            node_count,
+        )
         return ConnectionTestResult(
             success=True,
             cluster_version=cluster_version,
@@ -113,9 +156,18 @@ def test_connection(
             can_create_rbac=can_rbac,
         )
     except ApiException as e:
-        return ConnectionTestResult(
-            success=False,
-            error=f"kubernetes API error: {e.status} {e.reason}".strip(),
+        msg = f"kubernetes API error: {e.status} {e.reason}".strip()
+        logger.warning(
+            "host-cluster test_connection failed (API): server=%s err=%s",
+            server_url or "<unknown>",
+            msg,
         )
+        return ConnectionTestResult(success=False, error=msg)
     except Exception as e:  # pragma: no cover — connectivity errors
-        return ConnectionTestResult(success=False, error=f"{type(e).__name__}: {e}")
+        msg = f"{type(e).__name__}: {e}"
+        logger.warning(
+            "host-cluster test_connection failed (transport): server=%s err=%s",
+            server_url or "<unknown>",
+            msg,
+        )
+        return ConnectionTestResult(success=False, error=msg)

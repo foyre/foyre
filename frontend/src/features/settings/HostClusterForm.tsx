@@ -202,6 +202,24 @@ export function HostClusterForm({ initial, onSaved, onCancel }: Props) {
           </button>
           {testResult && <TestResultPill result={testResult} />}
         </div>
+        {testResult && !testResult.success && (
+          <div
+            className="error"
+            style={{ marginTop: 8, whiteSpace: "pre-wrap" }}
+          >
+            <strong>Connection failed.</strong>{" "}
+            {testResult.error ?? "no error detail returned"}
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Common causes when Foyre runs inside Kubernetes: the
+              kubeconfig's <code>server:</code> URL points at
+              <code> 127.0.0.1</code> / <code>localhost</code> (unreachable
+              from inside the pod), or the API server's TLS certificate
+              doesn't include a name reachable from the pod. Set
+              <code> server:</code> to a node IP / DNS name that the Foyre
+              pod can reach.
+            </div>
+          </div>
+        )}
       </label>
 
       {testResult?.success && (
