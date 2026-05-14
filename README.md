@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="frontend/public/foyre-logo.png" alt="Foyre" width="96" />
+  <a href="https://foyre.ai">
+    <img src="frontend/public/foyre-logo.png" alt="Foyre" width="96" />
+  </a>
 </p>
 
 <h1 align="center">Foyre</h1>
@@ -11,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="https://foyre.ai"><strong>foyre.ai</strong></a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#deployment">Deployment</a> ·
@@ -30,6 +33,9 @@ Requesters fill out a structured intake form. The system classifies the
 risk. Reviewers get a real, running Kubernetes virtual cluster for each
 request — so they can inspect what's actually being deployed, not just read
 about it. Decisions and discussions are recorded against every request.
+
+> Learn more about the product, see screenshots, and read the design
+> background at **[foyre.ai](https://foyre.ai)**.
 
 ## Features
 
@@ -671,3 +677,9 @@ products — subject to the terms of the license. See the [LICENSE](./LICENSE)
 and [NOTICE](./NOTICE) files for the full text and attribution requirements.
 
 Copyright (c) 2026 Zachary Feldstein and contributors.
+
+## Learn more
+
+- [foyre.ai](https://foyre.ai) — product site, docs, and announcements
+- [github.com/foyre/foyre](https://github.com/foyre/foyre) — source code, issues, and releases
+- [Docker Hub](https://hub.docker.com/r/zfeldstein/foyre) — container images

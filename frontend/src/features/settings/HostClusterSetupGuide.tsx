@@ -11,12 +11,25 @@ kind: ClusterRole
 metadata:
   name: foyre-provisioner
 rules:
+  # Read-only at the cluster level — needed for test-connection (list nodes)
+  # and to pick a node IP for the per-request NodePort service.
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  # Self-permission checks used by test-connection.
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectaccessreviews]
+    verbs: [create]
+  # Workload resources Foyre manages for each validation environment.
   - apiGroups: [""]
     resources: [namespaces, pods, services, configmaps, secrets,
-                serviceaccounts, persistentvolumeclaims]
+                serviceaccounts, persistentvolumeclaims, events]
     verbs: ["*"]
   - apiGroups: [apps]
     resources: [statefulsets, deployments, replicasets]
+    verbs: ["*"]
+  - apiGroups: [batch]
+    resources: [jobs]
     verbs: ["*"]
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [roles, rolebindings, clusterroles, clusterrolebindings]
