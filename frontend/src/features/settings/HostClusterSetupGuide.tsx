@@ -116,7 +116,12 @@ kubectl apply -f - <<'EOF'
 ${RBAC_YAML}EOF`}
           </pre>
 
-          <h5 style={{ marginBottom: 4 }}>3. Mint a kubeconfig for that service account</h5>
+          <h5 style={{ marginBottom: 4 }}>3. Generate a kubeconfig for that service account</h5>
+          <p className="muted" style={{ marginTop: 0 }}>
+            This one-liner reads the API server URL and CA cert from your
+            current kubectl context, mints a 1-year token for the service
+            account, and prints a complete kubeconfig YAML — no hand-editing.
+          </p>
           <pre
             style={{
               background: "var(--bg-soft)",
@@ -126,14 +131,59 @@ ${RBAC_YAML}EOF`}
               fontSize: 12,
             }}
           >
-{`kubectl -n foyre-system create token foyre-provisioner --duration=8760h`}
+{`SA_NS=foyre-system
+SA_NAME=foyre-provisioner
+
+# Read API server URL + CA from the *current* kubectl context.
+SERVER=$(kubectl config view --raw --minify -o jsonpath='{.clusters[0].cluster.server}')
+CA=$(kubectl config view --raw --flatten --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
+TOKEN=$(kubectl -n $SA_NS create token $SA_NAME --duration=8760h)
+
+cat <<EOF
+apiVersion: v1
+kind: Config
+clusters:
+- name: foyre-host
+  cluster:
+    server: $SERVER
+    certificate-authority-data: $CA
+users:
+- name: foyre-provisioner
+  user:
+    token: $TOKEN
+contexts:
+- name: foyre-host
+  context:
+    cluster: foyre-host
+    user: foyre-provisioner
+current-context: foyre-host
+EOF`}
           </pre>
           <p className="muted">
-            Take the token above and compose a kubeconfig YAML with your
-            cluster's API URL + CA certificate. Paste the resulting kubeconfig
-            into the form below, then click <strong>Test connection</strong>{" "}
-            before saving.
+            Paste the YAML it prints into the form below, then click{" "}
+            <strong>Test connection</strong> before saving.
           </p>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Sanity check the service account first — these should all print
+            <code> yes</code>. Any <code>no</code> means the ClusterRole in
+            step 2 didn't apply cleanly; re-run step 2.
+          </p>
+          <pre
+            style={{
+              background: "var(--bg-soft)",
+              padding: 8,
+              borderRadius: "var(--radius)",
+              overflow: "auto",
+              fontSize: 12,
+            }}
+          >
+{`SA=system:serviceaccount:foyre-system:foyre-provisioner
+kubectl auth can-i list nodes                     --as=$SA
+kubectl auth can-i list storageclasses            --as=$SA
+kubectl auth can-i create namespaces              --as=$SA
+kubectl auth can-i create clusterrolebindings     --as=$SA
+kubectl auth can-i create selfsubjectaccessreviews --as=$SA`}
+          </pre>
 
           <h5 style={{ marginBottom: 4 }}>4. External access (for requesters' kubectl)</h5>
           <p className="muted" style={{ marginTop: 0 }}>
