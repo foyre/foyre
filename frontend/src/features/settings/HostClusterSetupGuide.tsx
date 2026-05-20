@@ -31,9 +31,15 @@ rules:
   - apiGroups: [batch]
     resources: [jobs]
     verbs: ["*"]
+  # RBAC management. \`escalate\` + \`bind\` are required because vcluster
+  # creates ClusterRoles with broad permissions and ClusterRoleBindings that
+  # reference them; Kubernetes requires those verbs to delegate RBAC.
   - apiGroups: [rbac.authorization.k8s.io]
-    resources: [roles, rolebindings, clusterroles, clusterrolebindings]
-    verbs: [get, list, create, delete, patch]
+    resources: [roles, clusterroles]
+    verbs: [get, list, watch, create, update, patch, delete, escalate, bind]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings, clusterrolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies, ingresses]
     verbs: ["*"]

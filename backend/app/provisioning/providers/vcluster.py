@@ -12,6 +12,7 @@ namespace-only, etc.) can be swapped in without touching callers.
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import tempfile
@@ -22,6 +23,12 @@ import yaml
 from kubernetes import client as k8s_client
 from kubernetes import config as k8s_config
 from kubernetes.client.rest import ApiException
+
+logger = logging.getLogger(__name__)
+
+# Cap the size of the vcluster CLI's stderr/stdout we put into the
+# user-facing ProvisionError. The full output is always logged regardless.
+_CLI_OUTPUT_LIMIT = 4000
 
 
 @dataclass
@@ -68,9 +75,21 @@ def _run_vcluster(kubeconfig_path: str, *args: str, timeout: int = 120) -> str:
     except subprocess.TimeoutExpired:
         raise ProvisionError(f"vcluster {args[0]} timed out after {timeout}s")
     if proc.returncode != 0:
+        combined = (proc.stderr or "") + ("\n" + proc.stdout if proc.stdout else "")
+        combined = combined.strip()
+        # Log the full output so operators can read every error from kubectl logs,
+        # regardless of how much we trim in the UI-facing message.
+        logger.warning(
+            "vcluster %s failed rc=%s\n--- vcluster output (full) ---\n%s\n--- end ---",
+            args[0],
+            proc.returncode,
+            combined or "<empty>",
+        )
+        snippet = combined if len(combined) <= _CLI_OUTPUT_LIMIT else (
+            combined[:_CLI_OUTPUT_LIMIT] + f"\n…(truncated; {len(combined)} bytes total; full output in pod logs)"
+        )
         raise ProvisionError(
-            f"vcluster {args[0]} failed (rc={proc.returncode}): "
-            f"{(proc.stderr or proc.stdout).strip()[:500]}"
+            f"vcluster {args[0]} failed (rc={proc.returncode}): {snippet}"
         )
     return proc.stdout
 
