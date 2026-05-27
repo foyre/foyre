@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   view alongside the built-in ones.
 
 ### Security
+- **Chart 0.2.4:** the seed Secret is now a `pre-install,pre-upgrade`
+  hook (was `pre-install` only). Without this, a `helm upgrade` with a
+  fresh `--set-string seed.admin.password=...` would silently keep the
+  original install's password, and combined with the new
+  insecure-defaults guard would fail the post-upgrade seed Job. Operators
+  can now rotate the seed password by re-running `helm upgrade`.
 - **Chart 0.2.3:** `helm install` now fails template-rendering if
   `seed.admin.password` is left as the `CHANGE_ME_ON_FIRST_INSTALL`
   placeholder or empty. Prevents accidental deploys with a guessable admin
@@ -26,8 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The seeded admin user is now created with `must_change_password: true`,
   so the operator-supplied seed password is one-time-use even if it leaks.
 - **Backend:** when `APP_ENV` is not `local`/`dev`/`test`, the app refuses
-  to boot if `JWT_SECRET` or `SEED_ADMIN_PASSWORD` is a known-insecure
-  default. Local dev still warns but boots. The seed Job now runs with
+  to boot if `JWT_SECRET` is a known-insecure default; the one-shot seed
+  Job refuses to run if `SEED_ADMIN_PASSWORD` is a known-insecure default.
+  Local dev still warns but boots. The seed Job runs with
   `APP_ENV=production` so it inherits this protection.
 - **Provisioning:** vcluster CLI errors are now logged in full and the
   user-facing error includes up to 4 KB (was 500 chars), so failures like

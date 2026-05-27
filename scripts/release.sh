@@ -307,7 +307,7 @@ cat <<EOF
            helm repo update
            helm install foyre foyre/foyre --version ${CHART_VERSION} \\
              --namespace foyre --create-namespace \\
-             --set seed.admin.password='change-me'
+             --set-string seed.admin.password='<choose-a-strong-password>'
 
   GitHub   Draft a release in the UI, or:
            gh release create ${GIT_TAG} --title 'Foyre ${APP_VERSION}' \\
