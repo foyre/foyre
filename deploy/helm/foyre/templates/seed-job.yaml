@@ -33,6 +33,8 @@ spec:
           securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
           command: ["python", "-m", "app.seed"]
           env:
+            - name: APP_ENV
+              value: production
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

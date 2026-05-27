@@ -19,7 +19,12 @@ from app.models.request import IntakeRequest
 from app.models.user import User
 from app.repositories import requests as requests_repo
 from app.schemas.request import IntakePayload
-from app.services import history_service, risk_service, workflow_service
+from app.services import (
+    form_schema_service,
+    history_service,
+    risk_service,
+    workflow_service,
+)
 
 
 def _owns_or_privileged(user: User, req: IntakeRequest) -> bool:
@@ -80,6 +85,15 @@ def submit(db: Session, user: User, req: IntakeRequest) -> IntakeRequest:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"message": "payload is incomplete or invalid", "errors": e.errors()},
+        )
+    custom_errors = form_schema_service.validate_custom_payload(db, req.payload)
+    if custom_errors["errors"]:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "payload is incomplete or invalid",
+                "errors": custom_errors["errors"],
+            },
         )
     level, reasons = risk_service.derive_risk(validated)
     req.status = RequestStatus.submitted.value

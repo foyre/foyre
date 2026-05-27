@@ -1,4 +1,5 @@
 from app.models.comment import RequestComment
+from app.models.form_schema_config import FormSchemaConfig
 from app.models.history import RequestHistoryEvent
 from app.models.host_cluster_config import HostClusterConfig
 from app.models.request import IntakeRequest
@@ -11,5 +12,6 @@ __all__ = [
     "RequestComment",
     "RequestHistoryEvent",
     "HostClusterConfig",
+    "FormSchemaConfig",
     "ValidationEnvironment",
 ]

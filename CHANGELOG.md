@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Configurable intake form.** Admins can now customize the request form
+  from a new **Admin → Intake form** tab: relabel and re-section built-in
+  fields, add custom fields (text, long text, dropdown, yes/no), reorder
+  sections, and reset back to the built-in default. A live preview pane
+  shows requesters' view side-by-side. Built-in fields backing the risk
+  engine are locked so they can be relabeled but not removed or retyped,
+  keeping risk evaluation stable across customizations. Custom required
+  fields are enforced at submit time and surfaced in the request detail
+  view alongside the built-in ones.
+
+### Security
+- **Chart 0.2.3:** `helm install` now fails template-rendering if
+  `seed.admin.password` is left as the `CHANGE_ME_ON_FIRST_INSTALL`
+  placeholder or empty. Prevents accidental deploys with a guessable admin
+  password.
+- The seeded admin user is now created with `must_change_password: true`,
+  so the operator-supplied seed password is one-time-use even if it leaks.
+- **Backend:** when `APP_ENV` is not `local`/`dev`/`test`, the app refuses
+  to boot if `JWT_SECRET` or `SEED_ADMIN_PASSWORD` is a known-insecure
+  default. Local dev still warns but boots. The seed Job now runs with
+  `APP_ENV=production` so it inherits this protection.
+- **Provisioning:** vcluster CLI errors are now logged in full and the
+  user-facing error includes up to 4 KB (was 500 chars), so failures like
+  multi-line RBAC errors are debuggable from pod logs alone.
+- **Host-cluster setup guide (in-app and README):** added `escalate` /
+  `bind` verbs to the recommended RBAC so vcluster's ClusterRole +
+  ClusterRoleBinding can actually be created. Added a one-shell-command
+  kubeconfig generator that reads the API server URL + CA from the
+  operator's current kubectl context (no hand-edited YAML).
+
 ## [0.1.0] - 2026-05-07
 
 First usable release. Foyre is an internal front door for AI application

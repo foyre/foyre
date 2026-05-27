@@ -59,13 +59,17 @@ export interface HistoryEvent {
   created_at: string;
 }
 
+export type FormFieldType = "text" | "textarea" | "select" | "boolean";
+
 export interface FormField {
   name: string;
   label: string;
-  type: "text" | "textarea" | "select" | "boolean";
+  type: FormFieldType;
   required?: boolean;
   options?: { value: string; label: string }[];
   visible_if?: Record<string, unknown>;
+  /** "core" = built-in field locked by the backend; "custom" = admin-defined. */
+  source?: "core" | "custom";
 }
 
 export interface FormSection {

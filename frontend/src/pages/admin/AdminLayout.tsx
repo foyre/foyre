@@ -23,6 +23,15 @@ export function AdminLayout() {
           Users
         </NavLink>
         <NavLink
+          to="/admin/intake-form"
+          role="tab"
+          className={({ isActive }) =>
+            isActive ? "admin-tab is-active" : "admin-tab"
+          }
+        >
+          Intake form
+        </NavLink>
+        <NavLink
           to="/admin/validation-environments"
           role="tab"
           className={({ isActive }) =>

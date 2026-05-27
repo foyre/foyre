@@ -22,7 +22,11 @@ from app.schemas.user import UserRef
 
 
 class IntakePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # `extra="allow"` so admin-defined custom fields pass through validation.
+    # The core fields below remain the source of truth for everything risk
+    # rules depend on; custom fields are validated separately at submit time
+    # (see app.services.form_schema_service.validate_custom_payload).
+    model_config = ConfigDict(extra="allow")
 
     application_name: str = Field(min_length=1, max_length=200)
     business_owner: str

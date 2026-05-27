@@ -1,9 +1,16 @@
-"""Canonical intake form schema.
+"""Canonical default intake form schema.
 
-The shape here is deliberately boring: a list of sections, each with a list of
-fields. The frontend renders from this via `/api/meta/form-schema` so enums +
-help text live in one place. This is *not* a dynamic form builder; adding a
-field still means a code change in a Pydantic schema and (often) in risk rules.
+This is the schema Foyre ships with out of the box. Admins can customize the
+form via the admin UI; their customizations are stored in the
+`form_schema_configs` table and merged with these defaults on read.
+
+Core fields (those backing `IntakePayload` + risk evaluation) are LOCKED:
+admins may relabel them and put them in any section, but cannot remove,
+re-type, or change their `required`/`options`/`visible_if`. Custom fields
+admins add live alongside in the same payload JSON.
+
+Adding a new core field here is still a code change — both `IntakePayload`
+and (often) the risk rules need to know about it.
 """
 from __future__ import annotations
 
@@ -21,7 +28,7 @@ def _enum_options(enum_cls: type) -> list[dict[str, str]]:
     return [{"value": m.value, "label": m.value.replace("_", " ").title()} for m in enum_cls]
 
 
-FORM_SCHEMA: list[dict[str, Any]] = [
+DEFAULT_FORM_SCHEMA: list[dict[str, Any]] = [
     {
         "id": "basics",
         "title": "Basics",
@@ -96,3 +103,36 @@ FORM_SCHEMA: list[dict[str, Any]] = [
         ],
     },
 ]
+
+
+def _flatten_core_fields() -> dict[str, dict[str, Any]]:
+    """Map of core field name -> field def, taken from DEFAULT_FORM_SCHEMA."""
+    out: dict[str, dict[str, Any]] = {}
+    for section in DEFAULT_FORM_SCHEMA:
+        for field in section["fields"]:
+            out[field["name"]] = dict(field)
+    return out
+
+
+# Public, frozen metadata: which field names ship with Foyre, and what their
+# canonical (non-overridable) properties look like. Anything in this map is
+# considered "core" and is protected from admin edits beyond relabeling /
+# resectioning.
+CORE_FIELDS: dict[str, dict[str, Any]] = _flatten_core_fields()
+CORE_FIELD_NAMES: frozenset[str] = frozenset(CORE_FIELDS.keys())
+
+
+def default_schema() -> list[dict[str, Any]]:
+    """Return a deep-ish copy of the default schema (safe to mutate)."""
+    return [
+        {
+            "id": section["id"],
+            "title": section["title"],
+            "fields": [dict(f) for f in section["fields"]],
+        }
+        for section in DEFAULT_FORM_SCHEMA
+    ]
+
+
+# Backwards-compatible alias. New code should use DEFAULT_FORM_SCHEMA.
+FORM_SCHEMA = DEFAULT_FORM_SCHEMA

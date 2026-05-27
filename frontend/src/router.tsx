@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/useAuth";
 import { Layout } from "./components/Layout";
 import { AccountPage } from "./pages/AccountPage";
+import { AdminFormSchemaPage } from "./pages/admin/AdminFormSchemaPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminValidationEnvironmentsPage } from "./pages/admin/AdminValidationEnvironmentsPage";
@@ -73,6 +74,7 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to="users" replace />} />
           <Route path="users" element={<AdminUsersPage />} />
+          <Route path="intake-form" element={<AdminFormSchemaPage />} />
           <Route
             path="validation-environments"
             element={<AdminValidationEnvironmentsPage />}

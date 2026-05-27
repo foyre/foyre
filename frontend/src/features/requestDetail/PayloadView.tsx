@@ -15,8 +15,21 @@ function formatValue(v: unknown): { text: string; unset: boolean } {
  * Read-only, section-grouped render of a payload using the form schema's
  * section/field layout. Fields missing from the payload render as "—" so
  * reviewers see what's unanswered vs. what's explicitly blank.
+ *
+ * If the request payload carries keys that don't appear in the current
+ * schema (e.g. an admin removed a custom field after the request was
+ * created), we surface them under "Other answers" so the data isn't
+ * silently dropped from the UI.
  */
 export function PayloadView({ schema, payload }: Props) {
+  const knownNames = new Set<string>();
+  for (const s of schema.sections) {
+    for (const f of s.fields) knownNames.add(f.name);
+  }
+  const orphanEntries = Object.entries(payload).filter(
+    ([k]) => !knownNames.has(k),
+  );
+
   return (
     <div>
       {schema.sections.map((section) => (
@@ -35,6 +48,26 @@ export function PayloadView({ schema, payload }: Props) {
           </dl>
         </div>
       ))}
+      {orphanEntries.length > 0 && (
+        <div className="payload-section">
+          <h4 title="These answers were captured under field names that are no longer part of the intake form. Likely the admin removed the field after this request was created.">
+            Other answers (no longer in form)
+          </h4>
+          <dl>
+            {orphanEntries.map(([k, v]) => {
+              const { text, unset } = formatValue(v);
+              return (
+                <div key={k} style={{ display: "contents" }}>
+                  <dt>
+                    <code>{k}</code>
+                  </dt>
+                  <dd className={unset ? "unset" : undefined}>{text}</dd>
+                </div>
+              );
+            })}
+          </dl>
+        </div>
+      )}
     </div>
   );
 }

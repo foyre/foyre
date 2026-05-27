@@ -25,6 +25,10 @@ def run() -> None:
             email=settings.seed_admin_email,
             password_hash=hash_password(settings.seed_admin_password),
             role=Role.admin.value,
+            # Force the seeded admin to set their own password on first login.
+            # The chart and quickstart pass a password that the operator chose,
+            # but we still want to ensure that password isn't reused long-term.
+            must_change_password=True,
         )
         users_repo.create(db, admin)
         print(f"Created admin '{admin.username}'.")

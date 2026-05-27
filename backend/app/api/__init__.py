@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api import (
+    admin_form_schema,
     admin_users,
     auth,
     comments,
@@ -26,4 +27,7 @@ api_router.include_router(
 api_router.include_router(admin_users.router, prefix="/admin/users", tags=["admin"])
 api_router.include_router(
     host_clusters.router, prefix="/admin/host-clusters", tags=["admin"]
+)
+api_router.include_router(
+    admin_form_schema.router, prefix="/admin/form-schema", tags=["admin"]
 )
