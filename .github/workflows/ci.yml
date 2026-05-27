@@ -72,8 +72,11 @@ jobs:
           helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
           helm dependency build deploy/helm/foyre
 
+      # `seed.admin.password` defaults to a `CHANGE_ME_ON_FIRST_INSTALL`
+      # placeholder that the chart deliberately rejects at render time;
+      # CI just needs *some* non-placeholder value to exercise templating.
       - name: Lint
-        run: helm lint deploy/helm/foyre
+        run: helm lint deploy/helm/foyre --set-string seed.admin.password='ci-test-password'
 
       - name: Template (syntax / render check)
-        run: helm template foyre-ci deploy/helm/foyre --namespace foyre-ci > /tmp/rendered.yaml
+        run: helm template foyre-ci deploy/helm/foyre --namespace foyre-ci --set-string seed.admin.password='ci-test-password' > /tmp/rendered.yaml
