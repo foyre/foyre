@@ -160,7 +160,9 @@ run "helm repo add bitnami $BITNAMI_REPO_URL --force-update >/dev/null"
 run "helm dependency build $CHART_DIR >/dev/null"
 
 substep "helm lint"
-run "helm lint $CHART_DIR"
+# Chart rejects the placeholder password at render time; pass a throwaway
+# so the lint exercises templating without flagging a fake security issue.
+run "helm lint $CHART_DIR --set-string seed.admin.password='release-lint-check'"
 
 # ---------------------------------------------------------------------------
 # 2. CHANGELOG sanity

@@ -90,9 +90,12 @@ jobs:
           helm dependency build deploy/helm/foyre
 
       - name: Helm lint + template
+        # `seed.admin.password` defaults to a `CHANGE_ME_ON_FIRST_INSTALL`
+        # placeholder that the chart deliberately rejects at render time;
+        # CI just needs any non-placeholder value to exercise templating.
         run: |
-          helm lint deploy/helm/foyre
-          helm template foyre-ci deploy/helm/foyre --namespace foyre-ci > /tmp/rendered.yaml
+          helm lint deploy/helm/foyre --set-string seed.admin.password='ci-test-password'
+          helm template foyre-ci deploy/helm/foyre --namespace foyre-ci --set-string seed.admin.password='ci-test-password' > /tmp/rendered.yaml
 
   # PRs: Docker build only (no push, no cluster).
   build-verify:
