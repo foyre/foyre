@@ -10,11 +10,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-# Known-insecure placeholders. We refuse to use these in any non-local env
-# so an accidental `docker run` without env vars doesn't sign JWTs with
-# "change-me" or seed admin/admin.
+# Known-insecure placeholders. We refuse to boot the main app in any non-local
+# env if `JWT_SECRET` matches one of these — that secret is required by every
+# process and a placeholder would silently sign forgeable tokens.
+#
+# `SEED_ADMIN_PASSWORD` is validated separately in `app.seed`, NOT here: the
+# main app deliberately has no `SEED_ADMIN_PASSWORD` env var (it doesn't need
+# one), so checking it at module-import time would crash the API pod on a
+# value that's only relevant to the one-shot seed Job.
 _INSECURE_JWT_DEFAULTS = {"", "change-me", "changeme", "secret"}
-_INSECURE_SEED_PASSWORDS = {"admin", "password", "change-me", "CHANGE_ME_ON_FIRST_INSTALL"}
+INSECURE_SEED_PASSWORDS = {
+    "admin",
+    "password",
+    "change-me",
+    "CHANGE_ME_ON_FIRST_INSTALL",
+}
 
 
 class Settings(BaseSettings):
@@ -46,9 +56,18 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
+def is_production_env(s: Settings) -> bool:
+    """True iff this process is running in a real (non-local) environment."""
+    return s.app_env.lower() not in ("local", "dev", "development", "test")
+
+
 def _enforce_production_secrets(s: Settings) -> None:
-    """Refuse to boot in a non-local env if known-insecure defaults are in use."""
-    if s.app_env.lower() in ("local", "dev", "development", "test"):
+    """Refuse to boot in a non-local env if JWT_SECRET is a known-insecure default.
+
+    Only checks values that every process actually needs — i.e. `JWT_SECRET`.
+    `SEED_ADMIN_PASSWORD` is checked in `app.seed`, not here.
+    """
+    if not is_production_env(s):
         if s.jwt_secret in _INSECURE_JWT_DEFAULTS:
             logger.warning(
                 "JWT_SECRET is set to a known-insecure default (%r). "
@@ -57,21 +76,11 @@ def _enforce_production_secrets(s: Settings) -> None:
             )
         return
 
-    problems: list[str] = []
     if s.jwt_secret in _INSECURE_JWT_DEFAULTS:
-        problems.append(
-            f"JWT_SECRET is set to a known-insecure default ({s.jwt_secret!r}); "
-            "generate one with `openssl rand -hex 32`."
-        )
-    if s.seed_admin_password in _INSECURE_SEED_PASSWORDS:
-        problems.append(
-            f"SEED_ADMIN_PASSWORD is set to a known-insecure default "
-            f"({s.seed_admin_password!r}); choose a strong password."
-        )
-    if problems:
         raise RuntimeError(
-            "Refusing to start with insecure defaults (APP_ENV="
-            f"{s.app_env!r}):\n  - " + "\n  - ".join(problems)
+            f"Refusing to start with insecure defaults (APP_ENV={s.app_env!r}):\n"
+            f"  - JWT_SECRET is set to a known-insecure default ({s.jwt_secret!r}); "
+            "generate one with `openssl rand -hex 32`."
         )
 
 

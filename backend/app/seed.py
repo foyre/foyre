@@ -5,14 +5,33 @@ Usage:  python -m app.seed
 from __future__ import annotations
 
 from app.auth.passwords import hash_password
-from app.config import settings
+from app.config import INSECURE_SEED_PASSWORDS, is_production_env, settings
 from app.db import Base, SessionLocal, engine
 from app.domain.enums import Role
 from app.models.user import User
 from app.repositories import users as users_repo
 
 
+def _enforce_seed_password() -> None:
+    """Refuse to create the seed admin with a known-insecure password.
+
+    This check lives here (and not in `app.config`) because only the one-shot
+    seed Job is given `SEED_ADMIN_PASSWORD`; running it at import-time would
+    crash the main API pod, which doesn't need this value.
+    """
+    if not is_production_env(settings):
+        return
+    if settings.seed_admin_password in INSECURE_SEED_PASSWORDS:
+        raise RuntimeError(
+            "Refusing to seed the initial admin with a known-insecure "
+            f"password ({settings.seed_admin_password!r}) in APP_ENV="
+            f"{settings.app_env!r}. Set SEED_ADMIN_PASSWORD to a strong "
+            "value (e.g. via the chart's --set-string seed.admin.password=...)."
+        )
+
+
 def run() -> None:
+    _enforce_seed_password()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
