@@ -14,6 +14,7 @@ from app.api import (
     users,
     validation_environments,
     validation_pipelines,
+    validation_runs,
 )
 
 api_router = APIRouter()
@@ -35,3 +36,6 @@ api_router.include_router(
 api_router.include_router(
     validation_pipelines.router, prefix="/validation/pipelines", tags=["validation"]
 )
+# Run + artifact routes use mixed path roots (/requests/... and
+# /validation-runs/...), so they're registered without a shared prefix.
+api_router.include_router(validation_runs.router, tags=["validation"])
