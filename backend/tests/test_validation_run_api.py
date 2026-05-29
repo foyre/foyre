@@ -136,10 +136,11 @@ def _fake_executor(ctx: StepContext) -> StepOutcome:
 
 @pytest.fixture(autouse=True)
 def _register_fake_executors(monkeypatch):
-    """Replace real executors with fakes for the duration of each test."""
+    """Replace the real (cluster-touching) executors with fakes for each
+    test so the full run path is exercised without a Kubernetes cluster."""
     monkeypatch.setitem(executors._REGISTRY, "builtin.workload_inventory", _fake_executor)
     monkeypatch.setitem(executors._REGISTRY, "builtin.kubernetes_security", _fake_executor)
-    # image_scan stays unregistered → runner records it as skipped.
+    monkeypatch.setitem(executors._REGISTRY, "builtin.image_scan", _fake_executor)
 
 
 # ---------------------------------------------------------------------------
@@ -172,10 +173,9 @@ def test_reviewer_runs_default_pipeline_end_to_end(app_and_session):
     assert step_names == ["workload-inventory", "kubernetes-security", "image-scan"]
     by_name = {s["step_name"]: s for s in detail["step_results"]}
     assert by_name["workload-inventory"]["status"] == "passed"
-    # image-scan has no registered executor in chunk 3 → skipped.
-    assert by_name["image-scan"]["status"] == "skipped"
-    # Default pipeline: inventory warns, security+image-scan block. With fakes
-    # passing and image-scan skipped, run should be passed.
+    # image-scan now has a registered executor (chunk 4); faked → passed.
+    assert by_name["image-scan"]["status"] == "passed"
+    # All steps pass via fakes → run passed, no approval impact.
     assert detail["status"] == "passed"
     assert detail["approval_impact"] == "none"
     assert detail["summary_json"]["images"] == ["ghcr.io/example/app:latest"]
@@ -237,8 +237,8 @@ def test_artifacts_listed_and_downloadable(app_and_session):
     ).json()["id"]
 
     arts = client.get(f"/api/validation-runs/{run_id}/artifacts", headers=_auth(admin_tok)).json()
-    # Two executors produced one artifact each (image-scan skipped → none).
-    assert len(arts) == 2
+    # All three faked executors produce one artifact each.
+    assert len(arts) == 3
     assert all("content" not in a for a in arts)
 
     art_id = arts[0]["id"]
