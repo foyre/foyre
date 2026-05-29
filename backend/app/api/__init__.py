@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from app.api import (
     admin_form_schema,
     admin_users,
+    admin_validation_policy,
     auth,
     comments,
     host_clusters,
@@ -35,6 +36,9 @@ api_router.include_router(
 )
 api_router.include_router(
     validation_pipelines.router, prefix="/validation/pipelines", tags=["validation"]
+)
+api_router.include_router(
+    admin_validation_policy.router, prefix="/admin/validation/policy", tags=["admin"]
 )
 # Run + artifact routes use mixed path roots (/requests/... and
 # /validation-runs/...), so they're registered without a shared prefix.

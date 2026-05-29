@@ -21,13 +21,18 @@ from app.deps import get_current_user
 from app.domain.enums import PRIVILEGED_ROLES, Role
 from app.models.user import User
 from app.repositories import validation_artifacts as artifacts_repo
+from app.schemas.validation_policy import ApprovalGateOut
 from app.schemas.validation_run import (
     ArtifactOut,
     RunCreate,
     RunOut,
     RunSummaryOut,
 )
-from app.services import request_service, validation_run_service
+from app.services import (
+    request_service,
+    validation_approval_service,
+    validation_run_service,
+)
 
 router = APIRouter()
 
@@ -67,6 +72,31 @@ def list_validation_runs(
 ):
     request_service.get_authorized(db, user, request_id)
     return validation_run_service.list_runs(db, request_id)
+
+
+@router.get(
+    "/requests/{request_id}/validation-approval",
+    response_model=ApprovalGateOut,
+)
+def get_approval_gate(
+    request_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Whether the latest validation state permits approving this request.
+
+    Read-only; the UI uses it to render the approve button + warnings.
+    """
+    request_service.get_authorized(db, user, request_id)
+    gate = validation_approval_service.evaluate(db, request_id)
+    return ApprovalGateOut(
+        blocked=gate.blocked,
+        impact=gate.impact.value,
+        reason=gate.reason,
+        override_allowed=gate.override_allowed,
+        missing_validation=gate.missing_validation,
+        latest_run_id=gate.latest_run.id if gate.latest_run else None,
+    )
 
 
 @router.get("/validation-runs/{run_id}", response_model=RunOut)

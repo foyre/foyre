@@ -23,6 +23,7 @@ from app.services import (
     form_schema_service,
     history_service,
     risk_service,
+    validation_approval_service,
     workflow_service,
 )
 
@@ -114,7 +115,13 @@ def submit(db: Session, user: User, req: IntakeRequest) -> IntakeRequest:
 
 
 def change_status(
-    db: Session, user: User, req: IntakeRequest, new_status: RequestStatus
+    db: Session,
+    user: User,
+    req: IntakeRequest,
+    new_status: RequestStatus,
+    *,
+    override_validation: bool = False,
+    override_reason: str | None = None,
 ) -> IntakeRequest:
     try:
         workflow_service.assert_transition(
@@ -122,6 +129,13 @@ def change_status(
         )
     except workflow_service.TransitionNotAllowed as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+
+    # Validation approval gate: only relevant when approving.
+    if new_status == RequestStatus.approved:
+        _enforce_validation_gate(
+            db, user, req, override_validation=override_validation, override_reason=override_reason
+        )
+
     from_status = req.status
     req.status = new_status.value
     req = requests_repo.save(db, req)
@@ -133,3 +147,65 @@ def change_status(
         detail={"from": from_status, "to": new_status.value},
     )
     return req
+
+
+def _enforce_validation_gate(
+    db: Session,
+    user: User,
+    req: IntakeRequest,
+    *,
+    override_validation: bool,
+    override_reason: str | None,
+) -> None:
+    """Block (or override) approval based on the latest validation run.
+
+    Records `validation_approval_blocked` when an approval is refused and
+    `validation_override_used` when a reviewer overrides a blocked gate.
+    """
+    gate = validation_approval_service.evaluate(db, req.id)
+    if not gate.blocked:
+        return
+
+    if not override_validation:
+        history_service.record_event(
+            db,
+            request_id=req.id,
+            actor_id=user.id,
+            event_type=HistoryEventType.validation_approval_blocked,
+            detail={
+                "reason": gate.reason,
+                "impact": gate.impact.value,
+                "latest_run_id": gate.latest_run.id if gate.latest_run else None,
+            },
+        )
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "message": gate.reason or "Approval is blocked by validation policy.",
+                "approval_impact": gate.impact.value,
+                "override_allowed": gate.override_allowed,
+            },
+        )
+
+    # Override requested.
+    if not gate.override_allowed:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "validation override is disabled by policy; approval cannot be overridden",
+        )
+    if not override_reason or not override_reason.strip():
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "an override reason is required to approve past a blocking validation result",
+        )
+    history_service.record_event(
+        db,
+        request_id=req.id,
+        actor_id=user.id,
+        event_type=HistoryEventType.validation_override_used,
+        detail={
+            "reason": override_reason.strip(),
+            "impact": gate.impact.value,
+            "latest_run_id": gate.latest_run.id if gate.latest_run else None,
+        },
+    )

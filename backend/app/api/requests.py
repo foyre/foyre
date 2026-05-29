@@ -87,7 +87,14 @@ def change_status(
                 status.HTTP_403_FORBIDDEN,
                 "only the request owner or an admin can mark ready/unready",
             )
-    return request_service.change_status(db, user, req, body.new_status)
+    return request_service.change_status(
+        db,
+        user,
+        req,
+        body.new_status,
+        override_validation=body.override_validation,
+        override_reason=body.override_reason,
+    )
 
 
 @router.get("/{request_id}/history", response_model=list[HistoryEventOut])

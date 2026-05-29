@@ -65,6 +65,11 @@ class RequestUpdate(BaseModel):
 
 class StatusChange(BaseModel):
     new_status: RequestStatus
+    # When approving past a blocking validation result, a privileged user
+    # may override by setting this flag and supplying a reason (recorded in
+    # request history). Ignored for non-approval transitions.
+    override_validation: bool = False
+    override_reason: str | None = None
 
 
 class RequestOut(BaseModel):
