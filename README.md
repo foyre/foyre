@@ -48,6 +48,13 @@ about it. Decisions and discussions are recorded against every request.
   [vcluster](https://www.vcluster.com). They receive a scoped kubeconfig,
   deploy their application, then flag the request as ready for review.
   Reviewers see a living deployment, not a questionnaire.
+- **Validation pipelines.** Run repeatable, declarative checks against the
+  workload deployed in a validation environment — workload inventory,
+  Kubernetes security posture, container image scanning (Trivy by default,
+  pluggable), and your own custom containerized checks. Results and
+  evidence artifacts attach to the request, and a configurable gate can
+  warn or block approval. See
+  [Validation Pipelines](docs/concepts/validation-pipelines.md).
 - **Deterministic risk classification** — every submitted request gets a
   low / medium / high / unknown rating, with human-readable reasons. Rules
   are plain Python and easy to extend.
@@ -178,14 +185,25 @@ their submitted requests.
    uses `kubectl` / `helm` to deploy their application into the cluster,
    then flags the request as **ready for review**.
 
-4. **Review.** Reviewers (and architects / admins) see all form answers,
-   the risk assessment, any validation environment that's been
-   provisioned, and a comment thread. They can move a request to
-   `under_review`, post comments, and ultimately approve or reject.
+4. **Run validation pipelines.** Reviewers run a declarative validation
+   pipeline against the deployed workload: it collects a workload
+   inventory, reviews Kubernetes security posture, scans container images,
+   and can run custom containerized checks. Results and downloadable
+   evidence attach to the request, and the run's approval impact (`none`,
+   `warning`, or `blocked`) feeds the decision below. See
+   [Validation Pipelines](docs/concepts/validation-pipelines.md).
 
-5. **Decide.** An approval closes the request. A rejection records the
-   reason and preserves the audit trail. The requester can tear down the
-   validation cluster at any time, or an admin can do it on their behalf.
+5. **Review.** Reviewers (and architects / admins) see all form answers,
+   the risk assessment, any validation environment that's been
+   provisioned, validation results, and a comment thread. They can move a
+   request to `under_review`, post comments, and ultimately approve or
+   reject.
+
+6. **Decide.** An approval closes the request — blocked by validation
+   policy unless the findings are resolved or a reviewer overrides with a
+   recorded reason. A rejection records the reason and preserves the audit
+   trail. The requester can tear down the validation cluster at any time,
+   or an admin can do it on their behalf.
 
 Every status transition, comment, provisioning event, and teardown is
 recorded against the request with the acting user. Admins can act on
@@ -677,6 +695,15 @@ products — subject to the terms of the license. See the [LICENSE](./LICENSE)
 and [NOTICE](./NOTICE) files for the full text and attribution requirements.
 
 Copyright (c) 2026 Zachary Feldstein and contributors.
+
+## Documentation
+
+In-repo guides under [`docs/`](docs/):
+
+- [Validation Pipelines Overview](docs/concepts/validation-pipelines.md) — what they are and why.
+- [Run a Validation Pipeline Against an AI Workload](docs/tutorials/run-validation-pipeline.md) — hands-on tutorial.
+- [Configure Validation Pipelines](docs/admin/configure-validation-pipelines.md) — admin guide + YAML reference.
+- [Validation Pipeline API](docs/api/validation-pipeline.md) — API reference with curl examples.
 
 ## Learn more
 

@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Validation pipelines.** Foyre can now run repeatable, declarative
+  validation checks against the workload deployed in a request's
+  validation environment, turning the vcluster into an evidence-producing
+  review step. Admins author pipelines as YAML under **Admin → Validation
+  pipelines**; a default pipeline ("Default AI Workload Validation") is
+  seeded on install. Reviewers run a pipeline against a request from the
+  request page. Built-in step types: `builtin.workload_inventory` (no
+  secret values), `builtin.kubernetes_security` (posture findings), and
+  `builtin.image_scan` (Trivy bundled by default, scanner interface is
+  pluggable). `custom.kubernetes_job` runs an admin-provided container as a
+  hardened Job inside the validation vcluster and ingests its normalized
+  JSON result. Step results + downloadable evidence artifacts attach to the
+  request. A configurable approval gate (`requireValidationBeforeApproval`,
+  `blockApprovalOnFailedValidation`, `allowValidationOverride`) can warn or
+  block approval; blocked approvals can be overridden with a recorded
+  reason. Full API parity (pipeline CRUD, runs, artifacts, policy). See
+  [docs/concepts/validation-pipelines.md](docs/concepts/validation-pipelines.md).
 - **Configurable intake form.** Admins can now customize the request form
   from a new **Admin → Intake form** tab: relabel and re-section built-in
   fields, add custom fields (text, long text, dropdown, yes/no), reorder
