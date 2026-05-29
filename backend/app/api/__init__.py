@@ -13,6 +13,7 @@ from app.api import (
     requests,
     users,
     validation_environments,
+    validation_pipelines,
 )
 
 api_router = APIRouter()
@@ -30,4 +31,7 @@ api_router.include_router(
 )
 api_router.include_router(
     admin_form_schema.router, prefix="/admin/form-schema", tags=["admin"]
+)
+api_router.include_router(
+    validation_pipelines.router, prefix="/validation/pipelines", tags=["validation"]
 )
