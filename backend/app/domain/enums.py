@@ -80,6 +80,15 @@ class HistoryEventType(str, Enum):
     validation_env_ready = "validation_env_ready"
     validation_env_failed = "validation_env_failed"
     validation_env_torn_down = "validation_env_torn_down"
+    # Validation Pipelines (request-scoped events only — pipeline-level
+    # admin actions like create/update aren't tied to a single request and
+    # are intentionally not recorded here.)
+    validation_run_started = "validation_run_started"
+    validation_run_completed = "validation_run_completed"
+    validation_run_failed = "validation_run_failed"
+    validation_approval_blocked = "validation_approval_blocked"
+    validation_override_used = "validation_override_used"
+    validation_artifact_created = "validation_artifact_created"
 
 
 class ValidationEnvStatus(str, Enum):
@@ -87,3 +96,79 @@ class ValidationEnvStatus(str, Enum):
     ready = "ready"
     failed = "failed"
     torn_down = "torn_down"
+
+
+# ---------------------------------------------------------------------------
+# Validation Pipelines
+# ---------------------------------------------------------------------------
+
+
+class ValidationRunStatus(str, Enum):
+    """Lifecycle of one ValidationRun.
+
+    - `queued`   : created, not yet started by the runner thread.
+    - `running`  : at least one step has begun executing.
+    - `passed`   : all required steps passed.
+    - `warning`  : at least one step ended with status=warning, no blocking
+                   step failed.
+    - `failed`   : at least one required step ended with status=failed.
+    - `error`    : the runner itself errored before finishing (infra fault,
+                   not a step result).
+    - `cancelled`: marked cancelled by an operator (best-effort; threads
+                   can't be safely interrupted in Python — see the runner
+                   for the exact semantics).
+    """
+
+    queued = "queued"
+    running = "running"
+    passed = "passed"
+    warning = "warning"
+    failed = "failed"
+    error = "error"
+    cancelled = "cancelled"
+
+
+class ValidationStepStatus(str, Enum):
+    queued = "queued"
+    running = "running"
+    passed = "passed"
+    warning = "warning"
+    failed = "failed"
+    error = "error"
+    skipped = "skipped"
+
+
+class ValidationSeverity(str, Enum):
+    """Severity assigned to a step result or an individual finding."""
+
+    none = "none"
+    low = "low"
+    medium = "medium"
+    high = "high"
+    critical = "critical"
+
+
+class FailurePolicy(str, Enum):
+    """How a step's failure rolls up into the run + approval impact.
+
+    - `ignore`: never affects the run status or approval impact.
+    - `warn`  : a failure shows the step as warning; run is at most warning.
+    - `block` : a failure marks the run failed and contributes to a
+                `blocked` approval impact.
+    """
+
+    ignore = "ignore"
+    warn = "warn"
+    block = "block"
+
+
+class ApprovalImpact(str, Enum):
+    """Worst-case approval impact derived from a run's step results.
+
+    Approved-then-overridden requests still record `blocked` here; the
+    history event records the override + reason separately.
+    """
+
+    none = "none"
+    warning = "warning"
+    blocked = "blocked"
