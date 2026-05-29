@@ -26,10 +26,19 @@ export const updateRequest = (id: number, payload: Record<string, unknown>) =>
 export const submitRequest = (id: number) =>
   request<IntakeRequest>(`/requests/${id}/submit`, { method: "POST" });
 
-export const changeStatus = (id: number, new_status: RequestStatus) =>
+export interface StatusChangeOptions {
+  override_validation?: boolean;
+  override_reason?: string;
+}
+
+export const changeStatus = (
+  id: number,
+  new_status: RequestStatus,
+  options: StatusChangeOptions = {},
+) =>
   request<IntakeRequest>(`/requests/${id}/status`, {
     method: "POST",
-    body: JSON.stringify({ new_status }),
+    body: JSON.stringify({ new_status, ...options }),
   });
 
 export const listComments = (id: number) =>

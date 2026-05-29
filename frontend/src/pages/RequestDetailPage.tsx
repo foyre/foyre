@@ -11,7 +11,9 @@ import { CommentList } from "../features/comments/CommentList";
 import { HistoryList } from "../features/history/HistoryList";
 import { PayloadView } from "../features/requestDetail/PayloadView";
 import { availableTransitions } from "../features/requestActions";
+import { ApproveControl } from "../features/validation/ApproveControl";
 import { ValidationEnvCard } from "../features/validation/ValidationEnvCard";
+import { ValidationRunsPanel } from "../features/validation/ValidationRunsPanel";
 import {
   type FormSchema,
   type IntakeRequest,
@@ -160,18 +162,30 @@ export function RequestDetailPage() {
 
       {canReview && actions.length > 0 && (
         <div className="form-actions" style={{ marginBottom: 16 }}>
-          {actions.map((a) => (
-            <button
-              key={a.to}
-              className={a.kind === "primary" ? "primary" : undefined}
-              disabled={busy}
-              onClick={() =>
-                runAction(() => changeStatus(req.id, a.to as RequestStatus))
-              }
-            >
-              {a.label}
-            </button>
-          ))}
+          {actions.map((a) =>
+            a.to === "approved" ? (
+              <ApproveControl
+                key={a.to}
+                request={req}
+                reloadKey={reloadKey}
+                onApproved={(updated) => {
+                  setReq(updated);
+                  setReloadKey((k) => k + 1);
+                }}
+              />
+            ) : (
+              <button
+                key={a.to}
+                className={a.kind === "primary" ? "primary" : undefined}
+                disabled={busy}
+                onClick={() =>
+                  runAction(() => changeStatus(req.id, a.to as RequestStatus))
+                }
+              >
+                {a.label}
+              </button>
+            ),
+          )}
         </div>
       )}
 
@@ -186,6 +200,12 @@ export function RequestDetailPage() {
           onEnvChanged={() => setReloadKey((k) => k + 1)}
         />
       )}
+
+      <ValidationRunsPanel
+        request={req}
+        reloadKey={reloadKey}
+        onRunChanged={() => setReloadKey((k) => k + 1)}
+      />
 
       <div className="section-block">
         <h3>Comments</h3>

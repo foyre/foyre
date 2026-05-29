@@ -10,9 +10,9 @@ export const updateRequest = (id, payload) => request(`/requests/${id}`, {
     body: JSON.stringify({ payload }),
 });
 export const submitRequest = (id) => request(`/requests/${id}/submit`, { method: "POST" });
-export const changeStatus = (id, new_status) => request(`/requests/${id}/status`, {
+export const changeStatus = (id, new_status, options = {}) => request(`/requests/${id}/status`, {
     method: "POST",
-    body: JSON.stringify({ new_status }),
+    body: JSON.stringify({ new_status, ...options }),
 });
 export const listComments = (id) => request(`/requests/${id}/comments`);
 export const addComment = (id, body) => request(`/requests/${id}/comments`, {

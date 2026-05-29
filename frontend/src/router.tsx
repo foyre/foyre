@@ -7,6 +7,7 @@ import { AdminFormSchemaPage } from "./pages/admin/AdminFormSchemaPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminValidationEnvironmentsPage } from "./pages/admin/AdminValidationEnvironmentsPage";
+import { AdminValidationPipelinesPage } from "./pages/admin/AdminValidationPipelinesPage";
 import { ForcePasswordChangePage } from "./pages/ForcePasswordChangePage";
 import { LoginPage } from "./pages/LoginPage";
 import { RequestDetailPage } from "./pages/RequestDetailPage";
@@ -75,6 +76,10 @@ export function AppRouter() {
           <Route index element={<Navigate to="users" replace />} />
           <Route path="users" element={<AdminUsersPage />} />
           <Route path="intake-form" element={<AdminFormSchemaPage />} />
+          <Route
+            path="validation-pipelines"
+            element={<AdminValidationPipelinesPage />}
+          />
           <Route
             path="validation-environments"
             element={<AdminValidationEnvironmentsPage />}
