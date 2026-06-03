@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     # sidecar). Short by design — a single job's lifetime.
     validation_ingest_token_minutes: int = 60
 
+    # Push-model wiring for validation jobs. BOTH must be set to enable the
+    # uploader sidecar (which pushes /foyre/output evidence + result.json
+    # back to Foyre). When either is empty, validation jobs fall back to the
+    # log-only path (exit code + stdout, no artifact push).
+    #   - validation_runner_image: the slim foyre-runner image (carries the
+    #     uploader; also used as the script-tier runtime).
+    #   - validation_ingest_base_url: a Foyre base URL reachable from inside
+    #     the validation environment (in vcluster shared mode, the in-cluster
+    #     Service DNS). The sidecar POSTs to {base}/api/validation-ingest/{run}.
+    validation_runner_image: str = ""
+    validation_ingest_base_url: str = ""
+
     # Fernet key for encrypting sensitive fields at rest (host kubeconfigs,
     # user kubeconfigs). Generate with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

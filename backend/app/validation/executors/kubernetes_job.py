@@ -73,6 +73,43 @@ def build_input_configmap(name: str, namespace: str, inputs: dict[str, str]) -> 
     }
 
 
+def _uploader_sidecar(
+    *, uploader_image: str, ingest_url: str, ingest_token: str, run_id: int | None
+) -> dict[str, Any]:
+    """A native sidecar (init container with restartPolicy=Always) that
+    pushes /foyre/output back to Foyre after the main container exits.
+
+    Native-sidecar semantics: the kubelet SIGTERMs this container once the
+    regular containers finish; the uploader traps that and uploads within
+    the pod's termination grace period. Requires Kubernetes >= 1.29.
+    """
+    return {
+        "name": "foyre-uploader",
+        "image": uploader_image,
+        "restartPolicy": "Always",  # marks this init container as a sidecar
+        "command": ["python3", "/opt/foyre/uploader.py"],
+        "env": [
+            {"name": "FOYRE_INGEST_URL", "value": ingest_url},
+            {"name": "FOYRE_INGEST_TOKEN", "value": ingest_token},
+            {"name": "FOYRE_RUN_ID", "value": str(run_id) if run_id is not None else ""},
+            {"name": "FOYRE_OUTPUT_DIR", "value": _OUTPUT_MOUNT},
+        ],
+        "volumeMounts": [
+            {"name": "foyre-output", "mountPath": _OUTPUT_MOUNT, "readOnly": True},
+        ],
+        "securityContext": {
+            "allowPrivilegeEscalation": False,
+            "privileged": False,
+            "runAsNonRoot": True,
+            "capabilities": {"drop": ["ALL"]},
+        },
+        "resources": {
+            "requests": {"cpu": "50m", "memory": "64Mi"},
+            "limits": {"cpu": "500m", "memory": "256Mi"},
+        },
+    }
+
+
 def build_job_manifest(
     *,
     name: str,
@@ -84,8 +121,19 @@ def build_job_manifest(
     configmap_name: str,
     timeout_seconds: int,
     resources: dict[str, Any] | None = None,
+    # Push-model wiring (all three required to inject the uploader sidecar).
+    uploader_image: str | None = None,
+    ingest_url: str | None = None,
+    ingest_token: str | None = None,
+    run_id: int | None = None,
 ) -> dict[str, Any]:
-    """Build a hardened Job manifest. Pure → unit-tested for guardrails."""
+    """Build a hardened Job manifest. Pure → unit-tested for guardrails.
+
+    When `uploader_image` + `ingest_url` + `ingest_token` are all provided,
+    a native uploader sidecar is injected to push /foyre/output evidence +
+    result.json back to Foyre. Otherwise the Job runs without a sidecar
+    (log-only mode; the runner reads exit code + stdout directly).
+    """
     container: dict[str, Any] = {
         "name": "validator",
         "image": image,
@@ -112,6 +160,33 @@ def build_job_manifest(
     if env:
         container["env"] = [{"name": k, "value": str(v)} for k, v in env.items()]
 
+    pod_spec: dict[str, Any] = {
+        "restartPolicy": "Never",
+        # Never expose a service account token to a custom job.
+        "automountServiceAccountToken": False,
+        # Guardrails: never host-* anything.
+        "hostNetwork": False,
+        "hostPID": False,
+        "hostIPC": False,
+        "containers": [container],
+        "volumes": [
+            {"name": "foyre-input", "configMap": {"name": configmap_name}},
+            {"name": "foyre-output", "emptyDir": {}},
+        ],
+    }
+
+    if uploader_image and ingest_url and ingest_token:
+        pod_spec["initContainers"] = [
+            _uploader_sidecar(
+                uploader_image=uploader_image,
+                ingest_url=ingest_url,
+                ingest_token=ingest_token,
+                run_id=run_id,
+            )
+        ]
+        # Give the sidecar room to upload after the main container exits.
+        pod_spec["terminationGracePeriodSeconds"] = 60
+
     return {
         "apiVersion": "batch/v1",
         "kind": "Job",
@@ -122,20 +197,7 @@ def build_job_manifest(
             "ttlSecondsAfterFinished": 300,
             "template": {
                 "metadata": {"name": name},
-                "spec": {
-                    "restartPolicy": "Never",
-                    # Never expose a service account token to a custom job.
-                    "automountServiceAccountToken": False,
-                    # Guardrails: never host-* anything.
-                    "hostNetwork": False,
-                    "hostPID": False,
-                    "hostIPC": False,
-                    "containers": [container],
-                    "volumes": [
-                        {"name": "foyre-input", "configMap": {"name": configmap_name}},
-                        {"name": "foyre-output", "emptyDir": {}},
-                    ],
-                },
+                "spec": pod_spec,
             },
         },
     }
