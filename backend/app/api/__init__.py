@@ -14,6 +14,7 @@ from app.api import (
     requests,
     users,
     validation_environments,
+    validation_ingest,
     validation_pipelines,
     validation_runs,
 )
@@ -43,3 +44,7 @@ api_router.include_router(
 # Run + artifact routes use mixed path roots (/requests/... and
 # /validation-runs/...), so they're registered without a shared prefix.
 api_router.include_router(validation_runs.router, tags=["validation"])
+# Sidecar-facing ingest endpoint (authed by per-run token, not a user).
+api_router.include_router(
+    validation_ingest.router, prefix="/validation-ingest", tags=["validation"]
+)

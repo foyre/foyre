@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 480
 
+    # TTL for per-run validation ingest tokens (handed to the uploader
+    # sidecar). Short by design — a single job's lifetime.
+    validation_ingest_token_minutes: int = 60
+
     # Fernet key for encrypting sensitive fields at rest (host kubeconfigs,
     # user kubeconfigs). Generate with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

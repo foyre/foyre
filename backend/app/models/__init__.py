@@ -6,6 +6,7 @@ from app.models.request import IntakeRequest
 from app.models.user import User
 from app.models.validation_artifact import ValidationArtifact
 from app.models.validation_environment import ValidationEnvironment
+from app.models.validation_ingest_record import ValidationIngestRecord
 from app.models.validation_pipeline import ValidationPipeline
 from app.models.validation_policy_config import ValidationPolicyConfig
 from app.models.validation_run import ValidationRun
@@ -23,5 +24,6 @@ __all__ = [
     "ValidationRun",
     "ValidationStepResult",
     "ValidationArtifact",
+    "ValidationIngestRecord",
     "ValidationPolicyConfig",
 ]
