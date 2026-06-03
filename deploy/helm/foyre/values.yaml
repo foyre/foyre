@@ -213,6 +213,30 @@ auth:
   jwtExpiresMinutes: 480
 
 ## --------------------------------------------------------------------------
+## Validation pipelines
+## --------------------------------------------------------------------------
+validation:
+  # Slim runner image (deploy/runner/Dockerfile) used by the uploader
+  # sidecar AND as the runtime for inline-script steps (custom.script).
+  # CI publishes it as "<image.repository>-runner". REQUIRED to enable
+  # evidence push and inline scripts; leave empty to run validation jobs in
+  # log-only mode (exit code + stdout, no /foyre/output evidence).
+  runnerImage: ""
+
+  # Base URL the validation pods use to reach the Foyre API to upload
+  # evidence. In vcluster shared mode this is typically the in-cluster
+  # Service DNS, e.g.:
+  #   http://<release-name>-foyre.<namespace>.svc.cluster.local
+  # Must be reachable from inside the validation environment. Leave empty to
+  # disable evidence push (log-only mode). Both runnerImage AND ingestBaseUrl
+  # must be set for the uploader sidecar to be injected.
+  ingestBaseUrl: ""
+
+  # Allow admin-authored inline scripts (custom.script step type). Set false
+  # to disable arbitrary script execution entirely.
+  allowInlineScripts: true
+
+## --------------------------------------------------------------------------
 ## Probes
 ## --------------------------------------------------------------------------
 probes:

@@ -1,6 +1,7 @@
 # Design: Validation Pipeline Extensibility
 
-**Status:** Proposed (design only — no implementation yet)
+**Status:** Implemented (tiers 1–3 + the push-model evidence pipeline shipped;
+CEL/OPA power mode and object-storage retention remain future work)
 **Audience:** Foyre maintainers + reviewers
 **Supersedes framing in:** [Build Your Own Validation Step](build-a-validation-step.md)
 (that guide will be re-scoped to "Contributing a Native Validation Step")

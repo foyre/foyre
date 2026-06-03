@@ -135,16 +135,99 @@ Scans discovered images for vulnerabilities. `config`: `scanner`
 pluggable — additional scanners can be registered without changing the
 pipeline.
 
-### `custom.kubernetes_job`
+### `builtin.policy` — curated declarative checks (no code)
 
-Runs your own container image as a Kubernetes Job inside the validation
-environment.
+Evaluates a curated set of named rules over the workload inventory — no
+container, no script. The easiest way to add organization policy.
+
+```yaml
+- name: org-policy
+  type: builtin.policy
+  failurePolicy: block
+  dependsOn: [workload-inventory]
+  config:
+    checks:
+      no_privileged_containers: { severity: high }
+      require_resource_limits:  { severity: low }
+      deny_latest_tag:          { severity: medium }
+      allowed_registries:
+        severity: high
+        registries: ["registry.example.com", "ghcr.io/acme"]
+      required_labels:
+        severity: low
+        labels: ["app.kubernetes.io/owner"]
+      banned_capabilities:
+        severity: high
+        capabilities: ["SYS_ADMIN", "NET_ADMIN", "ALL"]
+      host_path_mounts: { severity: high }
+```
+
+Available checks: `no_privileged_containers`, `require_resource_limits`,
+`deny_latest_tag`, `allowed_registries`, `required_labels`,
+`banned_capabilities`, `host_path_mounts`. Omit `config.checks` to run a
+sensible default set. Each check's `severity` is overridable.
+
+### Bring-your-own logic: the shared step contract
+
+`custom.script` and `custom.kubernetes_job` both run inside the validation
+environment and share one contract:
+
+- **`/foyre/input`** (read-only): upstream artifacts (e.g.
+  `workload-inventory.json`).
+- **`/foyre/output`** (writable): anything written here becomes a
+  downloadable evidence artifact.
+- **Exit code** drives the result: `0` = passed, `2` = warning, other
+  non-zero = failed; a timeout / OOMKill = error.
+- **Optional `/foyre/output/result.json`** for rich findings — when present
+  it takes precedence over the exit code:
+
+  ```json
+  {
+    "status": "passed | warning | failed | error",
+    "severity": "none | low | medium | high | critical",
+    "summary": "Short summary",
+    "findings": [
+      { "severity": "medium", "title": "...", "resource": "deployment/rag-api",
+        "message": "...", "recommendation": "..." }
+    ]
+  }
+  ```
+
+Result precedence: `result.json` → a single JSON object on stdout
+(back-compat) → exit code. Evidence is pushed back to Foyre by an injected
+**uploader sidecar** (requires the validation cluster to reach the Foyre
+API — see Configuration). Without that wiring, steps run **log-only**
+(exit code + stdout; no `/foyre/output` evidence).
+
+### `custom.script` — inline script (no build)
+
+Paste a `bash` or `python` script directly in the pipeline; it runs in the
+bundled runner image — no container to build.
+
+```yaml
+- name: egress-check
+  type: custom.script
+  failurePolicy: warn
+  dependsOn: [workload-inventory]
+  timeoutSeconds: 300
+  config:
+    interpreter: bash          # bash | python
+    script: |
+      jq -e '...' /foyre/input/workload-inventory.json
+      # exit 0 = pass, 2 = warning, other = fail
+```
+
+Requires `validation.runnerImage` and `validation.allowInlineScripts: true`.
+
+### `custom.kubernetes_job` — bring your own container
+
+Runs your own container image as a Kubernetes Job, following the shared
+contract above.
 
 ```yaml
 - name: custom-company-check
   type: custom.kubernetes_job
   displayName: Company Policy Check
-  required: false
   failurePolicy: warn
   dependsOn: [workload-inventory]
   timeoutSeconds: 300
@@ -155,33 +238,8 @@ environment.
     # env: { KEY: value }
 ```
 
-**Contract for the custom container:**
-
-- Input artifacts (e.g. `workload-inventory.json`) are mounted read-only at
-  `/foyre/input`.
-- A scratch volume is mounted at `/foyre/output`.
-- The container **must print its normalized result as a single JSON object
-  to stdout**:
-
-  ```json
-  {
-    "status": "passed | warning | failed | error",
-    "severity": "none | low | medium | high | critical",
-    "summary": "Short summary of the result",
-    "findings": [
-      {
-        "severity": "medium",
-        "title": "External API endpoint detected",
-        "resource": "deployment/rag-api",
-        "message": "Workload references api.openai.com.",
-        "recommendation": "Confirm egress is approved for this endpoint."
-      }
-    ]
-  }
-  ```
-
-Foyre reads the pod logs, extracts the last JSON object, and stores both
-the parsed result and the raw logs as artifacts.
+A plain container that simply exits non-zero is enough — emitting
+`result.json` is optional, for richer findings.
 
 ## How failure policies work
 
@@ -207,19 +265,40 @@ When an approval is blocked, the reviewer either resolves the findings and
 re-runs, or (if allowed) overrides with a required reason. Overrides and
 blocked attempts are recorded in the request history.
 
+## Configuration (Helm)
+
+Evidence push (the uploader sidecar) and inline scripts require two chart
+values; without them, container/script steps run in **log-only** mode
+(exit code + stdout, no `/foyre/output` evidence):
+
+| Chart value | Env var | Purpose |
+|---|---|---|
+| `validation.runnerImage` | `VALIDATION_RUNNER_IMAGE` | Slim runner image (uploader sidecar + inline-script runtime). CI publishes it as `<image.repository>-runner`. |
+| `validation.ingestBaseUrl` | `VALIDATION_INGEST_BASE_URL` | Foyre base URL reachable from inside the validation environment (in vcluster shared mode, the in-cluster Service DNS). |
+| `validation.allowInlineScripts` | `VALIDATION_ALLOW_INLINE_SCRIPTS` | Allow `custom.script` (default true). |
+
+**Kubernetes ≥ 1.29** is required for the uploader sidecar (it uses native
+sidecar containers). The sidecar uploads on pod termination within the
+pod's grace period.
+
 ## Security considerations
 
 - Foyre never stores Kubernetes Secret values from the validation
   environment — only names/metadata.
 - Kubeconfigs are encrypted at rest and never exposed in logs, UI,
   artifacts, or API responses.
-- Custom jobs are guardrailed by construction: Foyre builds the pod spec,
-  so `privileged`, `hostPath`, `hostNetwork`, and `hostPID` are never set;
-  the service-account token is not mounted; Linux capabilities are dropped;
-  and resource limits are applied. Admins supply only the image, command,
-  args, and env.
-- Only admins can author pipelines, so only admin-approved images run as
-  custom jobs.
+- Custom jobs/scripts are guardrailed by construction: Foyre builds the pod
+  spec, so `privileged`, `hostPath`, `hostNetwork`, and `hostPID` are never
+  set; the service-account token is not mounted; Linux capabilities are
+  dropped; and resource limits are applied. Admins supply only the
+  image/script, command, args, and env.
+- Only admins can author pipelines, so only admin-approved images and
+  scripts run.
+- **Caveat:** a custom step that reads cluster Secrets and writes them to
+  `/foyre/output` or stdout will have that output stored as an artifact.
+  Artifacts follow the same access rules as the request; treat script and
+  container output as operator responsibility. Disable inline scripts
+  (`validation.allowInlineScripts: false`) for stricter environments.
 
 ## API
 

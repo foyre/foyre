@@ -8,7 +8,7 @@ description: |
 type: application
 
 # Bumped together with chart template changes.
-version: 0.2.4
+version: 0.2.5
 
 # The Foyre application version this chart packages by default.
 appVersion: "0.1.0"

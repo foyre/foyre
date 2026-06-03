@@ -118,6 +118,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build runner image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/runner/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   publish:
     needs: [validate]
     # `always()` so this job is evaluated when `validate` is skipped (e.g. PR); then the
@@ -167,6 +177,34 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      # Slim validation runner image (uploader sidecar + inline-script
+      # runtime). Published alongside the app image with matching tags.
+      - name: Docker metadata (runner image)
+        id: meta_runner
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}-runner
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern=v{{version}}
+            type=sha,prefix=sha-
+
+      - name: Build and push runner image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/runner/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta_runner.outputs.tags }}
+          labels: ${{ steps.meta_runner.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max
@@ -251,6 +289,16 @@ jobs:
 
           echo "Deploying ${IMAGE}:${TAG} to namespace ${NS}"
 
+          # Validation runner image is published with the same tag as the app
+          # image. The ingest base URL is operator-specific (must be reachable
+          # from validation pods); set it via the FOYRE_INGEST_BASE_URL repo
+          # variable to enable evidence push, otherwise validation runs
+          # log-only.
+          INGEST_ARGS=()
+          if [ -n "${{ vars.FOYRE_INGEST_BASE_URL }}" ]; then
+            INGEST_ARGS+=(--set-string "validation.ingestBaseUrl=${{ vars.FOYRE_INGEST_BASE_URL }}")
+          fi
+
           helm upgrade --install foyre deploy/helm/foyre \
             --namespace "$NS" \
             --create-namespace \
@@ -258,6 +306,8 @@ jobs:
             --set "image.tag=${TAG}" \
             --set service.type=NodePort \
             --set-string "seed.admin.password=${PW}" \
+            --set-string "validation.runnerImage=${IMAGE}-runner:${TAG}" \
+            "${INGEST_ARGS[@]}" \
             --atomic \
             --wait --timeout 25m
 

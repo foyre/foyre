@@ -1,18 +1,25 @@
 # Build Your Own Validation Step
 
 This guide explains how Foyre's validation pipelines execute and how to
-extend them with your own checks. There are two ways to add a step,
-depending on whether you can change Foyre's code:
+extend them. Most teams **don't need to write code** — pick the lowest tier
+that fits:
 
-1. **No code — `custom.kubernetes_job`.** Package your logic as a
-   container image and Foyre runs it as a Job. Best for most teams.
-2. **A native executor (code contribution).** Add a first-class step type
-   in Python. Best for checks you want bundled with Foyre.
+1. **`builtin.policy` — curated checks (no code, no container).** Declare
+   policy rules over the workload inventory in YAML. See the
+   [admin guide](../admin/configure-validation-pipelines.md).
+2. **`custom.script` — inline script (no build).** Paste bash/python; runs
+   in the bundled runner image.
+3. **`custom.kubernetes_job` — bring your own container.** Run any image;
+   exit non-zero to fail, optionally emit `result.json`.
+4. **A native executor (code contribution).** Add a first-class step type
+   in Python — **contributor-only**; needed only for checks bundled *into*
+   Foyre. Covered at the end of this doc.
 
-If you just want to *use* pipelines, see the
-[tutorial](../tutorials/run-validation-pipeline.md) and the
-[admin guide](../admin/configure-validation-pipelines.md). This document is
-about *building* steps.
+Tiers 1–3 are documented for operators in the
+[admin guide](../admin/configure-validation-pipelines.md); the shared
+container/script contract (`/foyre/input`, `/foyre/output`, exit codes,
+`result.json` precedence) lives there too. The rest of this document is for
+**contributors** adding a native step type or scanner.
 
 ---
 

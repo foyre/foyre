@@ -69,6 +69,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "foyre.appSecretName" . }}
                   key: {{ .Values.secrets.existingSecretKeys.jwtSecret }}
+            # Validation pipelines: runner image + ingest URL enable the
+            # uploader sidecar / inline scripts; empty => log-only mode.
+            - name: VALIDATION_RUNNER_IMAGE
+              value: {{ .Values.validation.runnerImage | quote }}
+            - name: VALIDATION_INGEST_BASE_URL
+              value: {{ .Values.validation.ingestBaseUrl | quote }}
+            - name: VALIDATION_ALLOW_INLINE_SCRIPTS
+              value: {{ .Values.validation.allowInlineScripts | quote }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

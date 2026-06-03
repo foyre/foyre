@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Validation pipeline extensibility — three task-authoring tiers.** Beyond
+  the built-in checks, teams can now add their own validation logic without
+  forking Foyre:
+  - `builtin.policy` — curated, declarative checks over the workload
+    inventory (no code, no container): deny privileged containers, require
+    resource limits, restrict image registries/tags, required labels,
+    banned capabilities, hostPath mounts.
+  - `custom.script` — paste a bash/python script in the pipeline YAML; runs
+    in a bundled slim runner image (no container to build), gated by
+    `validation.allowInlineScripts`.
+  - `custom.kubernetes_job` — relaxed contract: a plain container that exits
+    non-zero is enough (exit `0`=pass, `2`=warn, other=fail); emitting
+    `result.json` is optional for rich findings.
+
+  All container/script steps share one contract — inputs at `/foyre/input`,
+  evidence written to `/foyre/output`, result precedence `result.json` →
+  stdout JSON → exit code. Evidence is pushed back via an injected uploader
+  sidecar (native sidecar; **Kubernetes ≥ 1.29**), authenticated by a
+  per-run, scoped, short-lived token, with per-file/per-run artifact caps.
+  New chart values `validation.runnerImage` / `validation.ingestBaseUrl` /
+  `validation.allowInlineScripts` (chart 0.2.5); CI publishes a
+  `<image>-runner` image. Without the runner image + ingest URL, steps run
+  in log-only mode. Authoring a native step type remains a contributor path.
+  See [docs/dev/validation-extensibility-design.md](docs/dev/validation-extensibility-design.md).
 - **Validation pipelines.** Foyre can now run repeatable, declarative
   validation checks against the workload deployed in a request's
   validation environment, turning the vcluster into an evidence-producing
