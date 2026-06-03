@@ -701,13 +701,16 @@ Copyright (c) 2026 Zachary Feldstein and contributors.
 
 ## Documentation
 
-In-repo guides under [`docs/`](docs/):
+**Start at the [documentation index](docs/README.md)** — it has a
+one-minute explainer of validation pipelines and points you to the right
+guide. Direct links:
 
+- [Docs index](docs/README.md) — start here.
 - [Validation Pipelines Overview](docs/concepts/validation-pipelines.md) — what they are and why.
-- [Run a Validation Pipeline Against an AI Workload](docs/tutorials/run-validation-pipeline.md) — hands-on tutorial.
+- [Run a Validation Pipeline](docs/tutorials/run-validation-pipeline.md) — hands-on tutorial (how to use).
 - [Configure Validation Pipelines](docs/admin/configure-validation-pipelines.md) — admin guide + YAML reference.
-- [Build Your Own Validation Step](docs/dev/build-a-validation-step.md) — extend pipelines with custom or native steps.
 - [Validation Pipeline API](docs/api/validation-pipeline.md) — API reference with curl examples.
+- [Build a Validation Step](docs/dev/build-a-validation-step.md) — contributor guide for new step types.
 
 ## Learn more
 

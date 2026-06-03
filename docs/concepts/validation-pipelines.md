@@ -1,5 +1,11 @@
 # Validation Pipelines Overview
 
+> **Just want to use pipelines?** Start at the [docs index](../README.md) —
+> it has a one-minute explainer and points reviewers to the
+> [tutorial](../tutorials/run-validation-pipeline.md) and admins to the
+> [configuration guide](../admin/configure-validation-pipelines.md). This
+> page is the conceptual reference.
+
 Validation Pipelines let teams run repeatable checks against AI workloads
 deployed in a Foyre validation environment. Pipelines can collect workload
 inventory, inspect Kubernetes security posture, scan container images, run
@@ -48,7 +54,9 @@ step type among many — and it is replaceable.
 5. The approval flow uses that impact: a `blocked` run prevents approval
    unless a reviewer overrides it with a recorded reason.
 
-## Step types (MVP)
+## Step types
+
+**Built-in checks** (maintained by Foyre):
 
 - `builtin.workload_inventory` — enumerate deployed resources + metadata
   (never secret values).
@@ -57,11 +65,24 @@ step type among many — and it is replaceable.
   capabilities).
 - `builtin.image_scan` — scan discovered images for vulnerabilities
   (Trivy by default; the scanner is pluggable).
-- `custom.kubernetes_job` — run your own container as a Kubernetes Job in
-  the validation environment and ingest its normalized JSON result.
+- `builtin.policy` — curated, declarative policy rules over the inventory
+  (no code, no container).
 
-More step types (webhooks, SBOM, network egress, policy engines,
-additional scanners) can be added without changing the pipeline runner.
+**Bring your own logic** (easiest first):
+
+- `builtin.policy` — pick curated rules in YAML.
+- `custom.script` — paste a bash/python snippet; runs in a bundled image
+  (no container to build).
+- `custom.kubernetes_job` — run any container image; exit non-zero to fail,
+  optionally emit a `result.json` for rich findings.
+
+The custom tiers share one contract (`/foyre/input`, `/foyre/output`, exit
+codes, `result.json` precedence) documented in the
+[configuration guide](../admin/configure-validation-pipelines.md). Adding a
+*new built-in step type* in Python is a contributor task — see
+[Build a Validation Step](../dev/build-a-validation-step.md). Further types
+(webhooks, SBOM, network egress, OPA/CEL policy engines, more scanners) can
+be added without changing the pipeline runner.
 
 ## Failure policies and approval gating
 
@@ -81,7 +102,8 @@ Administrators tune the gate with three policies:
 
 ## Where to go next
 
+- [Docs index](../README.md) — start here / one-minute explainer.
 - [Run a Validation Pipeline Against an AI Workload](../tutorials/run-validation-pipeline.md) — hands-on tutorial.
 - [Configure Validation Pipelines](../admin/configure-validation-pipelines.md) — admin guide + YAML reference.
-- [Build Your Own Validation Step](../dev/build-a-validation-step.md) — extend pipelines with custom or native steps.
+- [Build a Validation Step](../dev/build-a-validation-step.md) — extend pipelines with custom or native steps.
 - [Validation Pipeline API](../api/validation-pipeline.md) — API reference with curl examples.

@@ -1,5 +1,9 @@
 # Configure Validation Pipelines
 
+> Part of the [Foyre docs](../README.md). For what pipelines are and how
+> reviewers run them, see the [docs index](../README.md) and the
+> [tutorial](../tutorials/run-validation-pipeline.md).
+
 This guide is for administrators. It covers creating and editing
 validation pipelines, the pipeline YAML format, step types, failure
 policies, approval gating, and security considerations.

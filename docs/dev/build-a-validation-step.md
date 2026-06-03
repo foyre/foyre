@@ -1,4 +1,9 @@
-# Build Your Own Validation Step
+# Build a Validation Step
+
+> Part of the [Foyre docs](../README.md). Most users do **not** need this
+> page — to *use* pipelines, see the
+> [docs index](../README.md). This guide is mainly for **contributors**
+> adding a built-in step type to Foyre.
 
 This guide explains how Foyre's validation pipelines execute and how to
 extend them. Most teams **don't need to write code** — pick the lowest tier
@@ -361,6 +366,7 @@ run.
 
 ## Related
 
+- [Docs index](../README.md)
 - [Validation Pipelines Overview](../concepts/validation-pipelines.md)
 - [Run a Validation Pipeline Against an AI Workload](../tutorials/run-validation-pipeline.md)
 - [Configure Validation Pipelines](../admin/configure-validation-pipelines.md)

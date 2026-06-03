@@ -1,5 +1,8 @@
 # Run a Validation Pipeline Against an AI Workload
 
+> Part of the [Foyre docs](../README.md). New to pipelines? The
+> [docs index](../README.md) has a one-minute explainer.
+
 This tutorial walks through validating an AI workload end-to-end: from an
 isolated validation environment, to deploying a sample workload, to running
 the default validation pipeline and reading the evidence before approval.
@@ -124,6 +127,7 @@ the approval gate.
 
 ## Related
 
+- [Docs index](../README.md)
 - [Validation Pipelines Overview](../concepts/validation-pipelines.md)
 - [Configure Validation Pipelines](../admin/configure-validation-pipelines.md)
 - [Validation Pipeline API](../api/validation-pipeline.md)

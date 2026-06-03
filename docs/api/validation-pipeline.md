@@ -1,5 +1,7 @@
 # Validation Pipeline API
 
+> Part of the [Foyre docs](../README.md).
+
 All validation features are available over the JSON API, so pipelines can
 be created and run without using the UI. Authenticate with a bearer token
 (the same token the web UI uses).
@@ -189,6 +191,7 @@ curl -X PUT $BASE/api/admin/validation/policy \
 
 ## Related
 
+- [Docs index](../README.md)
 - [Validation Pipelines Overview](../concepts/validation-pipelines.md)
 - [Run a Validation Pipeline Against an AI Workload](../tutorials/run-validation-pipeline.md)
 - [Configure Validation Pipelines](../admin/configure-validation-pipelines.md)
