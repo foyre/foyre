@@ -147,14 +147,23 @@ def _normalize_step(raw_step: Any, *, index: int, pipeline_default_policy: str) 
 
     spec = SUPPORTED_STEP_TYPES[step_type]
 
-    # Lightweight type-specific guardrail. Deeper validation (privileged
-    # spec rejection, etc.) for custom jobs lands in chunk 4.
+    # Lightweight type-specific guardrails.
     if spec.custom_job:
         image = config.get("image")
         if not isinstance(image, str) or not image.strip():
             raise _bad(
                 f"{where}: custom.kubernetes_job requires a non-empty "
                 "config.image."
+            )
+    if spec.inline_script:
+        script = config.get("script")
+        if not isinstance(script, str) or not script.strip():
+            raise _bad(f"{where}: custom.script requires a non-empty config.script.")
+        interpreter = config.get("interpreter", "bash")
+        if interpreter not in ("bash", "python"):
+            raise _bad(
+                f"{where}: custom.script interpreter must be 'bash' or 'python' "
+                f"(got {interpreter!r})."
             )
 
     display_name = raw_step.get("displayName")

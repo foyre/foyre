@@ -31,6 +31,7 @@ class StepTypeSpec:
     description: str
     builtin: bool
     custom_job: bool = False
+    inline_script: bool = False
 
 
 # MVP step types. Keep keys stable — they're persisted in pipeline
@@ -76,6 +77,18 @@ SUPPORTED_STEP_TYPES: dict[str, StepTypeSpec] = {
         ),
         builtin=True,
     ),
+    "custom.script": StepTypeSpec(
+        type="custom.script",
+        display_name="Inline Script",
+        description=(
+            "Run an admin-authored shell or python script inside the "
+            "validation environment using the bundled runner image — no "
+            "container to build. Exit code drives pass/warn/fail; files "
+            "written to /foyre/output become evidence."
+        ),
+        builtin=False,
+        inline_script=True,
+    ),
     "custom.kubernetes_job": StepTypeSpec(
         type="custom.kubernetes_job",
         display_name="Custom Kubernetes Job",
@@ -104,7 +117,6 @@ def get_spec(step_type: str) -> StepTypeSpec | None:
 PLANNED_STEP_TYPES: frozenset[str] = frozenset(
     {
         "custom.webhook",
-        "custom.script",
         "builtin.network_egress",
         "builtin.policy_engine",
         "builtin.sbom",

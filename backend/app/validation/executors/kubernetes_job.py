@@ -47,6 +47,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_NAMESPACE = "foyre-validation"
 _INPUT_MOUNT = "/foyre/input"
 _OUTPUT_MOUNT = "/foyre/output"
+_SCRIPT_MOUNT = "/foyre/script"
 _DNS1123 = re.compile(r"[^a-z0-9-]+")
 
 
@@ -121,6 +122,9 @@ def build_job_manifest(
     configmap_name: str,
     timeout_seconds: int,
     resources: dict[str, Any] | None = None,
+    # When set, mount an additional configmap (the inline script) read-only
+    # at /foyre/script.
+    script_configmap_name: str | None = None,
     # Push-model wiring (all three required to inject the uploader sidecar).
     uploader_image: str | None = None,
     ingest_url: str | None = None,
@@ -134,13 +138,18 @@ def build_job_manifest(
     result.json back to Foyre. Otherwise the Job runs without a sidecar
     (log-only mode; the runner reads exit code + stdout directly).
     """
+    main_mounts = [
+        {"name": "foyre-input", "mountPath": _INPUT_MOUNT, "readOnly": True},
+        {"name": "foyre-output", "mountPath": _OUTPUT_MOUNT},
+    ]
+    if script_configmap_name:
+        main_mounts.append(
+            {"name": "foyre-script", "mountPath": _SCRIPT_MOUNT, "readOnly": True}
+        )
     container: dict[str, Any] = {
         "name": "validator",
         "image": image,
-        "volumeMounts": [
-            {"name": "foyre-input", "mountPath": _INPUT_MOUNT, "readOnly": True},
-            {"name": "foyre-output", "mountPath": _OUTPUT_MOUNT},
-        ],
+        "volumeMounts": main_mounts,
         "securityContext": {
             "allowPrivilegeEscalation": False,
             "privileged": False,
@@ -174,6 +183,10 @@ def build_job_manifest(
             {"name": "foyre-output", "emptyDir": {}},
         ],
     }
+    if script_configmap_name:
+        pod_spec["volumes"].append(
+            {"name": "foyre-script", "configMap": {"name": script_configmap_name}}
+        )
 
     if uploader_image and ingest_url and ingest_token:
         pod_spec["initContainers"] = [
@@ -303,33 +316,42 @@ def _main_container_terminated_state(
     return None, None
 
 
-def _cleanup(batch, core, name: str, configmap_name: str, namespace: str) -> None:
+def _cleanup(batch, core, name: str, configmap_names: list[str], namespace: str) -> None:
     try:
-        batch.delete_namespaced_job(
-            name, namespace, propagation_policy="Background"
-        )
+        batch.delete_namespaced_job(name, namespace, propagation_policy="Background")
     except ApiException:
         logger.warning("failed to delete job %s/%s", namespace, name)
-    try:
-        core.delete_namespaced_config_map(configmap_name, namespace)
-    except ApiException:
-        logger.warning("failed to delete configmap %s/%s", namespace, configmap_name)
+    for cm in configmap_names:
+        try:
+            core.delete_namespaced_config_map(cm, namespace)
+        except ApiException:
+            logger.warning("failed to delete configmap %s/%s", namespace, cm)
 
 
-def run(ctx: StepContext) -> StepOutcome:
-    config = ctx.config
-    image = config.get("image")
-    if not image:
-        return StepOutcome(
-            status=ValidationStepStatus.error,
-            summary="custom.kubernetes_job is missing config.image.",
-            error_message="config.image is required",
-        )
+def run_container_job(
+    ctx: StepContext,
+    *,
+    image: str,
+    command: list[str] | None,
+    args: list[str] | None,
+    env: dict[str, str] | None,
+    resources: dict[str, Any] | None = None,
+    namespace: str | None = None,
+    script_content: str | None = None,
+) -> StepOutcome:
+    """Run a containerized validation job and resolve its outcome.
 
-    namespace = config.get("namespace") or _DEFAULT_NAMESPACE
+    Shared by `custom.kubernetes_job` and `custom.script`. Handles namespace
+    setup, input (and optional script) ConfigMaps, the hardened Job +
+    optional uploader sidecar, completion polling, and result resolution
+    (exit code / stdout; the sidecar's result.json is merged by the runner).
+    """
+    namespace = namespace or _DEFAULT_NAMESPACE
     name = job_name(ctx.run_id, ctx.step_name)
     cm_name = f"{name}-input"[:63]
+    script_cm_name = f"{name}-script"[:63] if script_content is not None else None
     timeout = int(ctx.step.get("timeoutSeconds", 300))
+    configmaps = [cm_name] + ([script_cm_name] if script_cm_name else [])
 
     try:
         api = kube.api_client_from_kubeconfig(ctx.kubeconfig_yaml)
@@ -342,6 +364,11 @@ def run(ctx: StepContext) -> StepOutcome:
         core.create_namespaced_config_map(
             namespace, build_input_configmap(cm_name, namespace, inputs)
         )
+        if script_cm_name:
+            core.create_namespaced_config_map(
+                namespace,
+                build_input_configmap(script_cm_name, namespace, {"run": script_content}),
+            )
 
         # Sidecar (push) mode when the runner supplied ingest wiring;
         # otherwise log-only (the runner reads exit code + stdout directly).
@@ -350,12 +377,13 @@ def run(ctx: StepContext) -> StepOutcome:
             name=name,
             namespace=namespace,
             image=image,
-            command=config.get("command"),
-            args=config.get("args"),
-            env=config.get("env"),
+            command=command,
+            args=args,
+            env=env,
             configmap_name=cm_name,
             timeout_seconds=timeout,
-            resources=config.get("resources"),
+            resources=resources,
+            script_configmap_name=script_cm_name,
             uploader_image=ctx.runner_image if sidecar_mode else None,
             ingest_url=ctx.ingest_base_url if sidecar_mode else None,
             ingest_token=ctx.ingest_token if sidecar_mode else None,
@@ -371,19 +399,19 @@ def run(ctx: StepContext) -> StepOutcome:
     except ApiException as e:
         return StepOutcome(
             status=ValidationStepStatus.error,
-            summary="Failed to run custom validation job.",
+            summary="Failed to run validation job.",
             error_message=f"kubernetes error: {e.status} {e.reason}",
         )
     except Exception as e:  # noqa: BLE001
-        logger.exception("custom job step failed")
+        logger.exception("container job step failed")
         return StepOutcome(
             status=ValidationStepStatus.error,
-            summary="Failed to run custom validation job.",
+            summary="Failed to run validation job.",
             error_message=f"{type(e).__name__}: {e}"[:2000],
         )
     finally:
         try:
-            _cleanup(batch, core, name, cm_name, namespace)  # type: ignore[possibly-undefined]
+            _cleanup(batch, core, name, configmaps, namespace)  # type: ignore[possibly-undefined]
         except Exception:  # noqa: BLE001
             pass
 
@@ -396,9 +424,9 @@ def run(ctx: StepContext) -> StepOutcome:
         )
     ]
 
-    # Resolve via precedence: result.json (not available until the uploader
-    # sidecar lands) → stdout JSON → exit code. A plain container that exits
-    # 0 now passes instead of erroring (the relaxed contract).
+    # Resolve via precedence: result.json (merged by the runner from the
+    # sidecar) → stdout JSON → exit code. A plain container that exits 0
+    # passes (the relaxed contract).
     resolved = results.resolve_outcome(
         job_state=outcome_state,
         exit_code=exit_code,
@@ -420,7 +448,7 @@ def run(ctx: StepContext) -> StepOutcome:
     return StepOutcome(
         status=resolved.status,
         severity=resolved.severity,
-        summary=resolved.summary or f"Custom job completed ({outcome_state}).",
+        summary=resolved.summary or f"Job completed ({outcome_state}).",
         findings=resolved.findings,
         details={
             "jobState": outcome_state,
@@ -429,4 +457,24 @@ def run(ctx: StepContext) -> StepOutcome:
         },
         artifacts=artifacts,
         error_message=resolved.error_message,
+    )
+
+
+def run(ctx: StepContext) -> StepOutcome:
+    config = ctx.config
+    image = config.get("image")
+    if not image:
+        return StepOutcome(
+            status=ValidationStepStatus.error,
+            summary="custom.kubernetes_job is missing config.image.",
+            error_message="config.image is required",
+        )
+    return run_container_job(
+        ctx,
+        image=image,
+        command=config.get("command"),
+        args=config.get("args"),
+        env=config.get("env"),
+        resources=config.get("resources"),
+        namespace=config.get("namespace"),
     )

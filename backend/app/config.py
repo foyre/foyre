@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     validation_runner_image: str = ""
     validation_ingest_base_url: str = ""
 
+    # Inline-script step tier (custom.script). Admin-authored scripts run as
+    # a Job in the validation environment using the runner image. Set False
+    # to disable arbitrary script execution entirely for stricter orgs.
+    validation_allow_inline_scripts: bool = True
+
     # Fernet key for encrypting sensitive fields at rest (host kubeconfigs,
     # user kubeconfigs). Generate with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

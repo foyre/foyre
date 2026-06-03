@@ -10,9 +10,10 @@ Registered step types:
   - builtin.kubernetes_security
   - builtin.image_scan
   - builtin.policy
+  - custom.script
   - custom.kubernetes_job
 
-Further types (custom.script, builtin.sbom, neuvector.scan, …) can be
+Further types (custom.webhook, builtin.sbom, neuvector.scan, …) can be
 added here or via `register()` without touching the runner.
 """
 from __future__ import annotations
@@ -21,6 +22,7 @@ from app.validation.executors.image_scan import run as image_scan_run
 from app.validation.executors.kubernetes_job import run as kubernetes_job_run
 from app.validation.executors.kubernetes_security import run as kubernetes_security_run
 from app.validation.executors.policy import run as policy_run
+from app.validation.executors.script import run as script_run
 from app.validation.executors.workload_inventory import run as workload_inventory_run
 from app.validation.types import ExecutorFn
 
@@ -29,6 +31,7 @@ _REGISTRY: dict[str, ExecutorFn] = {
     "builtin.kubernetes_security": kubernetes_security_run,
     "builtin.image_scan": image_scan_run,
     "builtin.policy": policy_run,
+    "custom.script": script_run,
     "custom.kubernetes_job": kubernetes_job_run,
 }
 
@@ -36,7 +39,9 @@ _REGISTRY: dict[str, ExecutorFn] = {
 # Step types that push results/artifacts back via the uploader sidecar +
 # ingest endpoint (the runner pre-creates a step result + mints a token for
 # these). Other step types are persisted by the runner after they return.
-INGEST_STEP_TYPES: frozenset[str] = frozenset({"custom.kubernetes_job"})
+INGEST_STEP_TYPES: frozenset[str] = frozenset(
+    {"custom.kubernetes_job", "custom.script"}
+)
 
 
 def get_executor(step_type: str) -> ExecutorFn | None:
