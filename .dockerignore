@@ -50,6 +50,10 @@ CODE_OF_CONDUCT.md
 CHANGELOG.md
 DEPLOY.md
 deploy/
+# …but keep the validation runner image's build inputs (deploy/runner/),
+# which the foyre-runner image (deploy/runner/Dockerfile) COPYs.
+!deploy/runner
+!deploy/runner/**
 Makefile
 .gitignore
 .dockerignore
