@@ -11,7 +11,7 @@ type: application
 version: 0.2.5
 
 # The Foyre application version this chart packages by default.
-appVersion: "0.1.0"
+appVersion: "0.2.0"
 
 # Optional bundled PostgreSQL via Bitnami's chart. Disabled by default; turn
 # on with postgresql.enabled=true. For production with managed Postgres

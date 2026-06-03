@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-03
+
 ### Added
 - **Validation pipeline extensibility — three task-authoring tiers.** Beyond
   the built-in checks, teams can now add their own validation logic without
