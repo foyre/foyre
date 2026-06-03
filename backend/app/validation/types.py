@@ -58,6 +58,15 @@ class StepContext:
     kubeconfig_yaml: str
     upstream: dict[str, "StepOutcome"] = field(default_factory=dict)
 
+    # Push-model wiring, populated by the runner for ingest step types
+    # (e.g. custom.kubernetes_job). When set, the executor injects the
+    # uploader sidecar so /foyre/output evidence + result.json flow back to
+    # Foyre. All None → log-only mode.
+    step_result_id: int | None = None
+    ingest_token: str | None = None
+    ingest_base_url: str | None = None
+    runner_image: str | None = None
+
     @property
     def config(self) -> dict[str, Any]:
         return self.step.get("config") or {}

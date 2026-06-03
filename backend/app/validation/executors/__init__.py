@@ -33,6 +33,12 @@ _REGISTRY: dict[str, ExecutorFn] = {
 }
 
 
+# Step types that push results/artifacts back via the uploader sidecar +
+# ingest endpoint (the runner pre-creates a step result + mints a token for
+# these). Other step types are persisted by the runner after they return.
+INGEST_STEP_TYPES: frozenset[str] = frozenset({"custom.kubernetes_job"})
+
+
 def get_executor(step_type: str) -> ExecutorFn | None:
     return _REGISTRY.get(step_type)
 

@@ -343,6 +343,9 @@ def run(ctx: StepContext) -> StepOutcome:
             namespace, build_input_configmap(cm_name, namespace, inputs)
         )
 
+        # Sidecar (push) mode when the runner supplied ingest wiring;
+        # otherwise log-only (the runner reads exit code + stdout directly).
+        sidecar_mode = bool(ctx.ingest_token and ctx.ingest_base_url and ctx.runner_image)
         manifest = build_job_manifest(
             name=name,
             namespace=namespace,
@@ -353,6 +356,10 @@ def run(ctx: StepContext) -> StepOutcome:
             configmap_name=cm_name,
             timeout_seconds=timeout,
             resources=config.get("resources"),
+            uploader_image=ctx.runner_image if sidecar_mode else None,
+            ingest_url=ctx.ingest_base_url if sidecar_mode else None,
+            ingest_token=ctx.ingest_token if sidecar_mode else None,
+            run_id=ctx.run_id,
         )
         batch.create_namespaced_job(namespace, manifest)
 
