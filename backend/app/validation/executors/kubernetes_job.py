@@ -37,8 +37,8 @@ from typing import Any
 from kubernetes import client as k8s_client
 from kubernetes.client.rest import ApiException
 
-from app.domain.enums import ValidationSeverity, ValidationStepStatus
-from app.validation import kube
+from app.domain.enums import ValidationStepStatus
+from app.validation import kube, results
 from app.validation.executors.workload_inventory import INVENTORY_ARTIFACT_NAME
 from app.validation.types import ArtifactDraft, StepContext, StepOutcome
 
@@ -48,9 +48,6 @@ _DEFAULT_NAMESPACE = "foyre-validation"
 _INPUT_MOUNT = "/foyre/input"
 _OUTPUT_MOUNT = "/foyre/output"
 _DNS1123 = re.compile(r"[^a-z0-9-]+")
-
-_VALID_STATUS = {s.value for s in ValidationStepStatus}
-_VALID_SEVERITY = {s.value for s in ValidationSeverity}
 
 
 # ---------------------------------------------------------------------------
@@ -144,67 +141,15 @@ def build_job_manifest(
     }
 
 
-def parse_result_from_logs(logs: str) -> dict[str, Any] | None:
-    """Extract the last well-formed JSON object from container stdout.
-
-    Tries the whole output first, then progressively trims to the last
-    balanced `{...}` block so log noise before the result is tolerated.
-    """
-    logs = (logs or "").strip()
-    if not logs:
-        return None
-    # Fast path: the whole output is the JSON object.
-    try:
-        obj = json.loads(logs)
-        if isinstance(obj, dict):
-            return obj
-    except ValueError:
-        pass
-    # Scan for the last balanced top-level object.
-    end = logs.rfind("}")
-    while end != -1:
-        depth = 0
-        start = -1
-        for i in range(end, -1, -1):
-            ch = logs[i]
-            if ch == "}":
-                depth += 1
-            elif ch == "{":
-                depth -= 1
-                if depth == 0:
-                    start = i
-                    break
-        if start != -1:
-            candidate = logs[start : end + 1]
-            try:
-                obj = json.loads(candidate)
-                if isinstance(obj, dict):
-                    return obj
-            except ValueError:
-                pass
-            end = logs.rfind("}", 0, start)
-        else:
-            break
-    return None
+# Back-compat shims: the result-resolution logic now lives in
+# `app.validation.results`. These delegators keep the original public names
+# working for callers/tests.
+def parse_result_from_logs(logs: str):
+    return results.extract_json_object(logs)
 
 
-def normalize_result(result: dict[str, Any]) -> tuple[ValidationStepStatus, ValidationSeverity, str, list[dict[str, Any]]]:
-    """Coerce a custom result dict into typed outcome fields."""
-    status_str = str(result.get("status", "")).lower()
-    status = (
-        ValidationStepStatus(status_str)
-        if status_str in _VALID_STATUS
-        else ValidationStepStatus.error
-    )
-    sev_str = str(result.get("severity", "none")).lower()
-    severity = (
-        ValidationSeverity(sev_str) if sev_str in _VALID_SEVERITY else ValidationSeverity.none
-    )
-    summary = str(result.get("summary") or "")
-    findings = result.get("findings") or []
-    if not isinstance(findings, list):
-        findings = []
-    return status, severity, summary, findings
+def normalize_result(result):
+    return results.normalize_result_dict(result)
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +216,31 @@ def _pod_logs(core: k8s_client.CoreV1Api, name: str, namespace: str) -> str:
         return ""
 
 
+def _main_container_terminated_state(
+    core: k8s_client.CoreV1Api, name: str, namespace: str
+) -> tuple[int | None, str | None]:
+    """Return (exit_code, terminated_reason) for the job's main container.
+
+    Used so result resolution can distinguish "ran and failed" (clean
+    nonzero exit) from "couldn't run" (OOMKilled, etc.). Returns (None, None)
+    when the state can't be read.
+    """
+    try:
+        pods = core.list_namespaced_pod(namespace, label_selector=f"job-name={name}")
+    except ApiException:
+        return None, None
+    if not pods.items:
+        return None, None
+    statuses = getattr(pods.items[0].status, "container_statuses", None) or []
+    for st in statuses:
+        if st.name != "validator":
+            continue
+        term = getattr(getattr(st, "state", None), "terminated", None)
+        if term is not None:
+            return getattr(term, "exit_code", None), getattr(term, "reason", None)
+    return None, None
+
+
 def _cleanup(batch, core, name: str, configmap_name: str, namespace: str) -> None:
     try:
         batch.delete_namespaced_job(
@@ -326,6 +296,9 @@ def run(ctx: StepContext) -> StepOutcome:
 
         outcome_state = _wait_for_job(batch, name, namespace, timeout)
         logs = _pod_logs(core, name, namespace)
+        exit_code, terminated_reason = _main_container_terminated_state(
+            core, name, namespace
+        )
     except ApiException as e:
         return StepOutcome(
             status=ValidationStepStatus.error,
@@ -354,34 +327,37 @@ def run(ctx: StepContext) -> StepOutcome:
         )
     ]
 
-    result = parse_result_from_logs(logs)
-    if result is None:
-        msg = (
-            "custom job did not emit a parseable JSON result on stdout"
-            if outcome_state != "timeout"
-            else f"custom job timed out after {timeout}s"
-        )
-        return StepOutcome(
-            status=ValidationStepStatus.error,
-            summary="No usable result from custom validation job.",
-            error_message=msg,
-            artifacts=artifacts,
+    # Resolve via precedence: result.json (not available until the uploader
+    # sidecar lands) → stdout JSON → exit code. A plain container that exits
+    # 0 now passes instead of erroring (the relaxed contract).
+    resolved = results.resolve_outcome(
+        job_state=outcome_state,
+        exit_code=exit_code,
+        terminated_reason=terminated_reason,
+        stdout=logs,
+        result_json_bytes=None,
+    )
+
+    if resolved.result_obj is not None:
+        artifacts.append(
+            ArtifactDraft(
+                name="custom-result.json",
+                artifact_type="json",
+                content=json.dumps(resolved.result_obj, indent=2).encode("utf-8"),
+                content_type="application/json",
+            )
         )
 
-    status, severity, summary, findings = normalize_result(result)
-    artifacts.append(
-        ArtifactDraft(
-            name="custom-result.json",
-            artifact_type="json",
-            content=json.dumps(result, indent=2).encode("utf-8"),
-            content_type="application/json",
-        )
-    )
     return StepOutcome(
-        status=status,
-        severity=severity,
-        summary=summary or f"Custom job completed ({outcome_state}).",
-        findings=findings,
-        details={"jobState": outcome_state},
+        status=resolved.status,
+        severity=resolved.severity,
+        summary=resolved.summary or f"Custom job completed ({outcome_state}).",
+        findings=resolved.findings,
+        details={
+            "jobState": outcome_state,
+            "exitCode": exit_code,
+            "resultSource": resolved.source,
+        },
         artifacts=artifacts,
+        error_message=resolved.error_message,
     )
