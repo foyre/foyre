@@ -194,6 +194,9 @@ def collect_inventory(api_client: k8s_client.ApiClient, config: dict[str, Any]) 
                 "owner": _owner_label(pod),
                 "namespace": getattr(meta, "namespace", None) if meta else None,
                 "podName": getattr(meta, "name", None) if meta else None,
+                # Pod labels (metadata only) — used by the policy step's
+                # required_labels check and useful evidence in general.
+                "labels": dict(getattr(meta, "labels", None) or {}) if meta else {},
                 "serviceAccountName": getattr(spec, "service_account_name", None) if spec else None,
                 "hostNetwork": bool(getattr(spec, "host_network", False)) if spec else False,
                 "hostPID": bool(getattr(spec, "host_pid", False)) if spec else False,

@@ -66,6 +66,16 @@ SUPPORTED_STEP_TYPES: dict[str, StepTypeSpec] = {
         ),
         builtin=True,
     ),
+    "builtin.policy": StepTypeSpec(
+        type="builtin.policy",
+        display_name="Policy Checks",
+        description=(
+            "Evaluate curated, declarative policy rules over the workload "
+            "inventory (no code, no container) — e.g. deny privileged "
+            "containers, require resource limits, restrict image registries."
+        ),
+        builtin=True,
+    ),
     "custom.kubernetes_job": StepTypeSpec(
         type="custom.kubernetes_job",
         display_name="Custom Kubernetes Job",
