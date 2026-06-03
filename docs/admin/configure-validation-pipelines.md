@@ -225,3 +225,9 @@ blocked attempts are recorded in the request history.
 
 Everything here is also available via the API — see
 [Validation Pipeline API](../api/validation-pipeline.md).
+
+## Building your own steps
+
+To add custom validation logic — either as a containerized
+`custom.kubernetes_job` (no code) or as a native step type (code) — see
+[Build Your Own Validation Step](../dev/build-a-validation-step.md).

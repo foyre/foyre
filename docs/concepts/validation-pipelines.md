@@ -83,4 +83,5 @@ Administrators tune the gate with three policies:
 
 - [Run a Validation Pipeline Against an AI Workload](../tutorials/run-validation-pipeline.md) — hands-on tutorial.
 - [Configure Validation Pipelines](../admin/configure-validation-pipelines.md) — admin guide + YAML reference.
+- [Build Your Own Validation Step](../dev/build-a-validation-step.md) — extend pipelines with custom or native steps.
 - [Validation Pipeline API](../api/validation-pipeline.md) — API reference with curl examples.

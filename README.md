@@ -703,6 +703,7 @@ In-repo guides under [`docs/`](docs/):
 - [Validation Pipelines Overview](docs/concepts/validation-pipelines.md) — what they are and why.
 - [Run a Validation Pipeline Against an AI Workload](docs/tutorials/run-validation-pipeline.md) — hands-on tutorial.
 - [Configure Validation Pipelines](docs/admin/configure-validation-pipelines.md) — admin guide + YAML reference.
+- [Build Your Own Validation Step](docs/dev/build-a-validation-step.md) — extend pipelines with custom or native steps.
 - [Validation Pipeline API](docs/api/validation-pipeline.md) — API reference with curl examples.
 
 ## Learn more
